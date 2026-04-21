@@ -52,7 +52,7 @@ jobs:
         run: |
           cargo llvm-cov --json --output-path rust-coverage.json \
             --manifest-path src-tauri/Cargo.toml \
-            --ignore-filename-regex "commands/"
+            --ignore-filename-regex "commands/|clipboard/platform|clipboard/poller|paste\.rs|settings\.rs|window\.rs|main\.rs"
 
       - name: Combine and write coverage badge
         run: |

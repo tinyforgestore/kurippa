@@ -49,3 +49,63 @@ pub(crate) fn mask_email(email: &str) -> String {
         None => "•••".to_string(),
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // --- mask_email ---
+
+    #[test]
+    fn mask_email_normal() {
+        assert_eq!(mask_email("user@example.com"), "u•••@example.com");
+    }
+
+    #[test]
+    fn mask_email_single_char_local() {
+        assert_eq!(mask_email("a@b.com"), "a•••@b.com");
+    }
+
+    #[test]
+    fn mask_email_no_at_sign() {
+        assert_eq!(mask_email("nodomain"), "•••");
+    }
+
+    #[test]
+    fn mask_email_empty_string() {
+        assert_eq!(mask_email(""), "•••");
+    }
+
+    // --- LicenseError Display ---
+
+    #[test]
+    fn display_invalid_key() {
+        assert_eq!(LicenseError::InvalidKey.to_string(), "InvalidKey");
+    }
+
+    #[test]
+    fn display_device_limit_reached() {
+        assert_eq!(LicenseError::DeviceLimitReached.to_string(), "DeviceLimitReached");
+    }
+
+    #[test]
+    fn display_network_error() {
+        assert_eq!(
+            LicenseError::NetworkError("timeout".to_string()).to_string(),
+            "NetworkError: timeout"
+        );
+    }
+
+    #[test]
+    fn display_already_activated() {
+        assert_eq!(LicenseError::AlreadyActivated.to_string(), "AlreadyActivated");
+    }
+
+    #[test]
+    fn display_unknown() {
+        assert_eq!(
+            LicenseError::Unknown("bad".to_string()).to_string(),
+            "Unknown: bad"
+        );
+    }
+}

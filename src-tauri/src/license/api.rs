@@ -39,39 +39,12 @@ pub async fn activate_license(app: &tauri::AppHandle, key: &str) -> Result<Activ
             .unwrap_or("")
             .to_string();
         log::warn!("[license] activation rejected by LS: {error_msg:?}");
-        let lower = error_msg.to_lowercase();
-        return if lower.contains("has reached the activation limit") {
-            Err(LicenseError::DeviceLimitReached)
-        } else if lower.contains("invalid") {
-            Err(LicenseError::InvalidKey)
-        } else if lower.contains("already activated") {
-            Err(LicenseError::AlreadyActivated)
-        } else {
-            Err(LicenseError::Unknown(error_msg))
-        };
+        return Err(classify_activation_error(&error_msg));
     }
 
-    let product_id = json
-        .get("meta")
-        .and_then(|m| m.get("product_id"))
-        .and_then(|v| v.as_u64())
-        .unwrap_or(0)
-        .to_string();
+    log::info!("[license] activated=true");
 
-    log::info!("[license] activated=true product_id={product_id:?}");
-
-    if product_id != PRODUCT_ID_LIVE && product_id != PRODUCT_ID_TEST {
-        log::warn!("[license] product_id mismatch — rejecting");
-        return Err(LicenseError::InvalidKey);
-    }
-
-    let instance_id = json
-        .get("instance")
-        .and_then(|i| i.get("id"))
-        .and_then(|v| v.as_str())
-        .filter(|s| !s.is_empty())
-        .ok_or_else(|| LicenseError::Unknown("Missing instance ID in activation response".to_string()))?
-        .to_string();
+    let (instance_id, details) = parse_activation_response(&json)?;
 
     let activated_at = chrono_now_rfc3339();
 
@@ -82,43 +55,7 @@ pub async fn activate_license(app: &tauri::AppHandle, key: &str) -> Result<Activ
     };
     save_license_file(app, &info);
 
-    let meta = json.get("meta");
-    let lk = json.get("license_key");
-
-    let variant_name = meta
-        .and_then(|m| m.get("variant_name"))
-        .and_then(|v| v.as_str())
-        .unwrap_or("Default");
-    let plan_suffix = if variant_name == "Default" { "Lifetime" } else { variant_name };
-    let plan_name = format!("Kurippa — {plan_suffix}");
-
-    let email_raw = meta
-        .and_then(|m| m.get("customer_email"))
-        .and_then(|v| v.as_str())
-        .unwrap_or("");
-    let email_masked = mask_email(email_raw);
-
-    let device_count = lk
-        .and_then(|l| l.get("activation_usage"))
-        .and_then(|v| v.as_u64())
-        .unwrap_or(1);
-    let device_limit = lk
-        .and_then(|l| l.get("activation_limit"))
-        .and_then(|v| v.as_u64())
-        .unwrap_or(3);
-
-    let expires_label = match lk.and_then(|l| l.get("expires_at")).and_then(|v| v.as_str()) {
-        Some(d) if !d.is_empty() => d.to_string(),
-        _ => "Never (lifetime license)".to_string(),
-    };
-
-    Ok(ActivationDetails {
-        plan_name,
-        email_masked,
-        device_count,
-        device_limit,
-        expires_label,
-    })
+    Ok(details)
 }
 
 pub async fn deactivate_license(app: &tauri::AppHandle) -> Result<(), LicenseError> {
@@ -202,6 +139,89 @@ pub async fn revalidate(app: &tauri::AppHandle) -> Result<(), LicenseError> {
     Ok(())
 }
 
+/// Maps an error message string from the LS API to the correct LicenseError variant.
+fn classify_activation_error(error_msg: &str) -> LicenseError {
+    let lower = error_msg.to_lowercase();
+    if lower.contains("has reached the activation limit") {
+        LicenseError::DeviceLimitReached
+    } else if lower.contains("invalid") {
+        LicenseError::InvalidKey
+    } else if lower.contains("already activated") {
+        LicenseError::AlreadyActivated
+    } else {
+        LicenseError::Unknown(error_msg.to_string())
+    }
+}
+
+/// Parses a successful activation JSON response into (instance_id, ActivationDetails).
+/// Returns Err if product_id doesn't match or instance_id is missing.
+fn parse_activation_response(
+    json: &serde_json::Value,
+) -> Result<(String, ActivationDetails), LicenseError> {
+    let product_id = json
+        .get("meta")
+        .and_then(|m| m.get("product_id"))
+        .and_then(|v| v.as_u64())
+        .unwrap_or(0)
+        .to_string();
+
+    if product_id != PRODUCT_ID_LIVE && product_id != PRODUCT_ID_TEST {
+        log::warn!("[license] product_id mismatch — rejecting");
+        return Err(LicenseError::InvalidKey);
+    }
+
+    let instance_id = json
+        .get("instance")
+        .and_then(|i| i.get("id"))
+        .and_then(|v| v.as_str())
+        .filter(|s| !s.is_empty())
+        .ok_or_else(|| {
+            LicenseError::Unknown("Missing instance ID in activation response".to_string())
+        })?
+        .to_string();
+
+    let meta = json.get("meta");
+    let lk = json.get("license_key");
+
+    let variant_name = meta
+        .and_then(|m| m.get("variant_name"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("Default");
+    let plan_suffix = if variant_name == "Default" { "Lifetime" } else { variant_name };
+    let plan_name = format!("Kurippa — {plan_suffix}");
+
+    let email_raw = meta
+        .and_then(|m| m.get("customer_email"))
+        .and_then(|v| v.as_str())
+        .unwrap_or("");
+    let email_masked = mask_email(email_raw);
+
+    let device_count = lk
+        .and_then(|l| l.get("activation_usage"))
+        .and_then(|v| v.as_u64())
+        .unwrap_or(1);
+    let device_limit = lk
+        .and_then(|l| l.get("activation_limit"))
+        .and_then(|v| v.as_u64())
+        .unwrap_or(3);
+
+    let expires_label = match lk.and_then(|l| l.get("expires_at")).and_then(|v| v.as_str()) {
+        Some(d) if !d.is_empty() => d.to_string(),
+        _ => "Never (lifetime license)".to_string(),
+    };
+
+    Ok((
+        instance_id,
+        ActivationDetails {
+            plan_name,
+            email_masked,
+            device_count,
+            device_limit,
+            expires_label,
+        },
+    ))
+}
+
 fn chrono_now_rfc3339() -> String {
     use std::time::{SystemTime, UNIX_EPOCH};
     let secs = SystemTime::now()
@@ -234,4 +254,181 @@ fn days_to_ymd(days: u64) -> (u64, u64, u64) {
     let m = if mp < 10 { mp + 3 } else { mp - 9 };
     let y = if m <= 2 { y + 1 } else { y };
     (y, m, d)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    // --- classify_activation_error ---
+
+    #[test]
+    fn classify_device_limit_reached() {
+        let err = classify_activation_error("has reached the activation limit");
+        assert!(matches!(err, LicenseError::DeviceLimitReached));
+    }
+
+    #[test]
+    fn classify_invalid_key() {
+        let err = classify_activation_error("This license key is invalid");
+        assert!(matches!(err, LicenseError::InvalidKey));
+    }
+
+    #[test]
+    fn classify_already_activated() {
+        let err = classify_activation_error("License is already activated");
+        assert!(matches!(err, LicenseError::AlreadyActivated));
+    }
+
+    #[test]
+    fn classify_unknown() {
+        let err = classify_activation_error("something else");
+        match err {
+            LicenseError::Unknown(msg) => assert_eq!(msg, "something else"),
+            other => panic!("expected Unknown, got {other:?}"),
+        }
+    }
+
+    // --- parse_activation_response ---
+
+    fn make_valid_json(product_id: &str, instance_id: &str, variant: &str) -> serde_json::Value {
+        serde_json::json!({
+            "meta": {
+                "product_id": product_id.parse::<u64>().unwrap_or(0),
+                "variant_name": variant,
+                "customer_email": "user@example.com"
+            },
+            "instance": {
+                "id": instance_id
+            },
+            "license_key": {
+                "activation_usage": 2_u64,
+                "activation_limit": 5_u64
+            }
+        })
+    }
+
+    #[test]
+    fn parse_valid_test_product_default_variant() {
+        let json = make_valid_json(PRODUCT_ID_TEST, "inst-abc", "Default");
+        let (id, details) = parse_activation_response(&json).unwrap();
+        assert_eq!(id, "inst-abc");
+        assert_eq!(details.plan_name, "Kurippa — Lifetime");
+        assert_eq!(details.email_masked, "u•••@example.com");
+        assert_eq!(details.device_count, 2);
+        assert_eq!(details.device_limit, 5);
+        assert_eq!(details.expires_label, "Never (lifetime license)");
+    }
+
+    #[test]
+    fn parse_named_variant_uses_variant_name() {
+        let json = make_valid_json(PRODUCT_ID_TEST, "inst-xyz", "Annual");
+        let (_, details) = parse_activation_response(&json).unwrap();
+        assert_eq!(details.plan_name, "Kurippa — Annual");
+    }
+
+    #[test]
+    fn parse_wrong_product_id_returns_invalid_key() {
+        let json = make_valid_json("000000", "inst-abc", "Default");
+        let err = parse_activation_response(&json).unwrap_err();
+        assert!(matches!(err, LicenseError::InvalidKey));
+    }
+
+    #[test]
+    fn parse_missing_instance_id_returns_unknown() {
+        let json = serde_json::json!({
+            "meta": { "product_id": PRODUCT_ID_TEST.parse::<u64>().unwrap() },
+            "license_key": {}
+        });
+        let err = parse_activation_response(&json).unwrap_err();
+        assert!(matches!(err, LicenseError::Unknown(_)));
+    }
+
+    #[test]
+    fn parse_empty_instance_id_returns_unknown() {
+        let json = serde_json::json!({
+            "meta": { "product_id": PRODUCT_ID_TEST.parse::<u64>().unwrap() },
+            "instance": { "id": "" },
+            "license_key": {}
+        });
+        let err = parse_activation_response(&json).unwrap_err();
+        assert!(matches!(err, LicenseError::Unknown(_)));
+    }
+
+    #[test]
+    fn parse_expires_at_present() {
+        let mut json = make_valid_json(PRODUCT_ID_TEST, "inst-abc", "Default");
+        json["license_key"]["expires_at"] = serde_json::Value::String("2025-12-31".to_string());
+        let (_, details) = parse_activation_response(&json).unwrap();
+        assert_eq!(details.expires_label, "2025-12-31");
+    }
+
+    #[test]
+    fn parse_expires_at_absent_is_lifetime() {
+        let json = make_valid_json(PRODUCT_ID_TEST, "inst-abc", "Default");
+        let (_, details) = parse_activation_response(&json).unwrap();
+        assert_eq!(details.expires_label, "Never (lifetime license)");
+    }
+
+    // --- days_to_ymd ---
+
+    #[test]
+    fn days_to_ymd_epoch() {
+        assert_eq!(days_to_ymd(0), (1970, 1, 1));
+    }
+
+    #[test]
+    fn days_to_ymd_one_year() {
+        assert_eq!(days_to_ymd(365), (1971, 1, 1));
+    }
+
+    #[test]
+    fn days_to_ymd_2000_03_01() {
+        // 2000-03-01 is day 11017 from 1970-01-01
+        assert_eq!(days_to_ymd(11017), (2000, 3, 1));
+    }
+
+    #[test]
+    fn days_to_ymd_leap_day_2000_02_29() {
+        // 2000-02-29 is day 11016 from 1970-01-01
+        assert_eq!(days_to_ymd(11016), (2000, 2, 29));
+    }
+
+    // --- chrono_now_rfc3339 ---
+
+    #[test]
+    fn chrono_now_rfc3339_format() {
+        let ts = chrono_now_rfc3339();
+        let re = regex_lite(&ts);
+        assert!(re, "timestamp '{ts}' did not match RFC3339 UTC pattern");
+    }
+
+    /// Returns true if the string matches ^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$
+    fn regex_lite(s: &str) -> bool {
+        let bytes = s.as_bytes();
+        if bytes.len() != 20 {
+            return false;
+        }
+        let digit = |b: u8| b.is_ascii_digit();
+        digit(bytes[0])
+            && digit(bytes[1])
+            && digit(bytes[2])
+            && digit(bytes[3])
+            && bytes[4] == b'-'
+            && digit(bytes[5])
+            && digit(bytes[6])
+            && bytes[7] == b'-'
+            && digit(bytes[8])
+            && digit(bytes[9])
+            && bytes[10] == b'T'
+            && digit(bytes[11])
+            && digit(bytes[12])
+            && bytes[13] == b':'
+            && digit(bytes[14])
+            && digit(bytes[15])
+            && bytes[16] == b':'
+            && digit(bytes[17])
+            && digit(bytes[18])
+            && bytes[19] == b'Z'
+    }
 }
