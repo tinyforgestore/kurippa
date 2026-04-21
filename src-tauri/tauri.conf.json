@@ -1,0 +1,80 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "kurippa",
+  "version": "1.0.0",
+  "identifier": "store.tinyforge.kurippa",
+  "build": {
+    "beforeDevCommand": "pnpm dev",
+    "devUrl": "http://localhost:1420",
+    "beforeBuildCommand": "pnpm build",
+    "frontendDist": "../dist"
+  },
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "kurippa",
+        "width": 400,
+        "height": 500,
+        "visible": false,
+        "resizable": false,
+        "decorations": false,
+        "transparent": true
+      },
+      {
+        "label": "settings",
+        "url": "settings.html",
+        "title": "",
+        "width": 680,
+        "height": 520,
+        "visible": false,
+        "resizable": false,
+        "decorations": true,
+        "transparent": false,
+        "titleBarStyle": "Overlay"
+      },
+      {
+        "label": "activation",
+        "url": "activation.html",
+        "title": "",
+        "width": 480,
+        "height": 420,
+        "visible": false,
+        "resizable": false,
+        "decorations": true,
+        "transparent": false,
+        "titleBarStyle": "Overlay",
+        "center": true
+      }
+    ],
+    "macOSPrivateApi": true,
+    "security": {
+      "csp": "default-src 'self'; script-src 'self'; img-src 'self' asset: https://asset.localhost; connect-src ipc: http://ipc.localhost",
+      "assetProtocol": {
+        "enable": true,
+        "scope": [
+          "$APPDATA/images/**"
+        ]
+      }
+    }
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "PLACEHOLDER_PUBKEY",
+      "endpoints": [
+        "https://github.com/tinyforge/kurippa/releases/latest/download/latest.json"
+      ]
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ]
+  }
+}

@@ -1,0 +1,77 @@
+name: Coverage
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  coverage:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Linux system dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev build-essential curl wget file \
+            libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - name: Install frontend dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: TypeScript coverage
+        run: pnpm vitest run --coverage
+
+      - name: Set up Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: llvm-tools-preview
+
+      - name: Install cargo-llvm-cov
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-llvm-cov
+
+      - name: Rust coverage
+        run: |
+          cargo llvm-cov --json --output-path rust-coverage.json \
+            --manifest-path src-tauri/Cargo.toml \
+            --ignore-filename-regex "commands/"
+
+      - name: Combine and write coverage badge
+        run: |
+          node -e "
+          const fs = require('fs');
+          const tsPct   = JSON.parse(fs.readFileSync('coverage/coverage-summary.json')).total.lines.pct;
+          const rustPct = JSON.parse(fs.readFileSync('rust-coverage.json')).data[0].totals.lines.percent;
+          const total   = ((tsPct + rustPct) / 2).toFixed(1);
+          const color   = total >= 90 ? 'brightgreen' : total >= 70 ? 'green' : total >= 50 ? 'yellow' : 'red';
+          fs.writeFileSync('coverage.json', JSON.stringify({
+            schemaVersion: 1, label: 'coverage', message: total + '%', color,
+          }));
+          console.log('TS: ' + tsPct + '%  Rust: ' + rustPct + '%  Combined: ' + total + '%');
+          "
+
+      - name: Commit coverage badge
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add coverage.json
+          git diff --staged --quiet || git commit -m "chore: update coverage badge [skip ci]"
+          git push
