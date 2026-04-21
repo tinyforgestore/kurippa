@@ -6,7 +6,7 @@
   ![Platform](https://img.shields.io/badge/platform-macOS%20·%20Windows-lightgrey)
   [![Coverage](https://img.shields.io/endpoint?url=https://raw.githubusercontent.com/tinyforgestore/kurippa/main/coverage.json)](coverage.json)
 
-  **Clipboard history, engineered for keyboard workflows.**
+  **Clipboard manager for power users.**
 
   <a href="https://github.com/tinyforgestore/kurippa/releases/latest"><img src="https://img.shields.io/badge/Download-Latest-black?style=for-the-badge" /></a>
   &nbsp;
@@ -20,29 +20,13 @@
 
 ## About
 
-Kurippa is a fast, local-first clipboard manager built for developers and keyboard-driven workflows. Hit the hotkey, type to filter, press a number to paste — no mouse required. It captures everything you copy, stores it persistently across reboots, and keeps your data entirely on-device: no cloud, no accounts, no telemetry.
+Kurippa is a fast, local-first clipboard manager built for anyone who copies a lot. Hit the hotkey, type to filter, press a number to paste — no mouse required. It captures everything you copy, stores it persistently across reboots, and keeps your data entirely on-device: no cloud, no accounts, no telemetry.
 
 Copy a hex colour and see the swatch. Copy an image and see a thumbnail. Paste HTML, wrap it in a code block, or extract a QR code — all without leaving the keyboard.
 
-## Features
-
-| Feature | Free trial | Paid |
-|---|:---:|:---:|
-| Clipboard history | Last 15 items | Up to configured limit |
-| Fuzzy search | ✓ | ✓ |
-| Pin items | ✓ | ✓ |
-| Paste As menu (plain text, code block, case transforms…) | ✓ | ✓ |
-| Keyboard shortcuts (⌘1–⌘9 / Ctrl+1–9) | ✓ | ✓ |
-| Preview panel | ✓ | ✓ |
-| Colour swatch preview | ✓ | ✓ |
-| Text transforms | ✓ | ✓ |
-| Multi-paste / merge | — | ✓ |
-| Folder organisation | — | ✓ |
-| QR code extraction | — | ✓ |
-
 ## Open Core
 
-The source code is released under GPLv3. Pre-built binaries are sold on the TinyForge store — buying a license supports continued development and unlocks the full history limit and pro features.
+The source code is released under GPLv3. Binaries and a license key are available at tinyforge.store — buying a license supports continued development and unlocks the full history and pro features.
 
 ## License
 

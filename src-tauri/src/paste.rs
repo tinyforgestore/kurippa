@@ -63,7 +63,7 @@ pub fn simulate_paste() {
 pub fn simulate_paste() {
     use windows::Win32::UI::Input::KeyboardAndMouse::{
         SendInput, INPUT, INPUT_0, INPUT_KEYBOARD, KEYBDINPUT, KEYBD_EVENT_FLAGS,
-        VIRTUAL_KEY, VK_CONTROL, VK_V,
+        VK_CONTROL, VK_V,
     };
 
     std::thread::sleep(PASTE_DELAY);

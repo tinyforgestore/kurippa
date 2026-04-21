@@ -4,7 +4,7 @@
 /// - Skip formats whose data exceeds 10 MB.
 /// - Skip unknown synthesised formats that have no registered name.
 pub fn read_all_formats_windows() -> Vec<(String, Vec<u8>)> {
-    use windows::Win32::Foundation::HWND;
+    use windows::Win32::Foundation::HGLOBAL;
     use windows::Win32::System::DataExchange::{
         CloseClipboard, EnumClipboardFormats, GetClipboardData, GetClipboardFormatNameA,
         OpenClipboard,
@@ -38,7 +38,7 @@ pub fn read_all_formats_windows() -> Vec<(String, Vec<u8>)> {
     }
 
     unsafe {
-        if OpenClipboard(HWND::default()).is_err() {
+        if OpenClipboard(None).is_err() {
             return Vec::new();
         }
 
@@ -68,16 +68,17 @@ pub fn read_all_formats_windows() -> Vec<(String, Vec<u8>)> {
                 _ => continue,
             };
 
-            let ptr = GlobalLock(handle);
+            let hglobal = HGLOBAL(handle.0);
+            let ptr = GlobalLock(hglobal);
             if ptr.is_null() {
                 continue;
             }
-            let size = GlobalSize(handle);
+            let size = GlobalSize(hglobal);
             if size > 0 && size <= MAX_FORMAT_BYTES {
                 let bytes = std::slice::from_raw_parts(ptr as *const u8, size).to_vec();
                 result.push((name, bytes));
             }
-            GlobalUnlock(handle);
+            let _ = GlobalUnlock(hglobal);
         }
 
         let _ = CloseClipboard();
@@ -122,7 +123,7 @@ pub fn write_all_formats_windows(formats: &[(String, Vec<u8>)]) -> bool {
     }
 
     unsafe {
-        if OpenClipboard(HWND::default()).is_err() {
+        if OpenClipboard(None).is_err() {
             return false;
         }
         if EmptyClipboard().is_err() {
@@ -158,7 +159,7 @@ pub fn write_all_formats_windows(formats: &[(String, Vec<u8>)]) -> bool {
             GlobalUnlock(hmem);
 
             // SetClipboardData takes ownership of hmem on success
-            if SetClipboardData(fmt_id, windows::Win32::Foundation::HANDLE(hmem.0)).is_ok() {
+            if SetClipboardData(fmt_id, Some(windows::Win32::Foundation::HANDLE(hmem.0))).is_ok() {
                 any_written = true;
             }
         }
