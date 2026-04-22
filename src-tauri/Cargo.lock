@@ -2923,7 +2923,7 @@ dependencies = [
 
 [[package]]
 name = "kurippa"
-version = "1.0.9"
+version = "1.0.10"
 dependencies = [
  "arboard",
  "core-foundation 0.10.1",
