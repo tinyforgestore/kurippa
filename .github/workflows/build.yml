@@ -75,6 +75,7 @@ jobs:
           releaseId: ${{ needs.create-release.outputs.release_id }}
           args: --target universal-apple-darwin
           updaterJsonKeepUniversal: true
+          includeUpdaterJson: false
 
       - name: Rename macOS artifact to stable name
         env:
@@ -84,6 +85,24 @@ jobs:
             --jq '.[] | select(.name | endswith(".dmg")) | .id')
           gh api -X PATCH "repos/${{ github.repository }}/releases/assets/$ASSET_ID" \
             -f name="Kurippa_universal.dmg"
+
+      - name: Sign macOS updater artifact
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          TAR="src-tauri/target/universal-apple-darwin/release/bundle/macos/Kurippa.app.tar.gz"
+          printf '%s\n' "$TAURI_SIGNING_PRIVATE_KEY" > /tmp/signing_key
+          pnpm tauri signer sign -k /tmp/signing_key \
+            --password "$TAURI_SIGNING_PRIVATE_KEY_PASSWORD" \
+            "$TAR"
+          rm /tmp/signing_key
+
+      - name: Upload macOS signature
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-sig
+          path: src-tauri/target/universal-apple-darwin/release/bundle/macos/Kurippa.app.tar.gz.sig
 
   build-windows:
     name: Build Windows (.exe)
@@ -125,6 +144,19 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
           releaseId: ${{ needs.create-release.outputs.release_id }}
+          includeUpdaterJson: false
+
+      - name: Upload NSIS zip and collect signature
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        shell: bash
+        run: |
+          VERSION="${{ inputs.tag }}"
+          VERSION="${VERSION#v}"
+          NSIS_ZIP="src-tauri/target/release/bundle/nsis/Kurippa_${VERSION}_x64-setup.nsis.zip"
+          gh release upload "${{ inputs.tag }}" "$NSIS_ZIP" \
+            --repo "${{ github.repository }}" --clobber
+          cp "${NSIS_ZIP}.sig" windows.sig
 
       - name: Rename Windows artifact to stable name
         env:
@@ -135,3 +167,53 @@ jobs:
             --jq '.[] | select(.name | endswith("-setup.exe")) | .id')
           gh api -X PATCH "repos/${{ github.repository }}/releases/assets/$ASSET_ID" \
             -f name="Kurippa_x64-setup.exe"
+
+      - name: Upload Windows signature
+        uses: actions/upload-artifact@v4
+        with:
+          name: windows-sig
+          path: windows.sig
+
+  generate-updater-json:
+    name: Generate Updater JSON
+    needs: [create-release, build-macos, build-windows]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download signatures
+        uses: actions/download-artifact@v4
+        with:
+          pattern: "*-sig"
+          merge-multiple: true
+          path: sigs
+
+      - name: Generate and upload latest.json
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ inputs.tag }}"
+          VERSION="${VERSION#v}"
+          REPO="${{ github.repository }}"
+          BASE_URL="https://github.com/${REPO}/releases/download/v${VERSION}"
+
+          jq -n \
+            --arg version "$VERSION" \
+            --arg pub_date "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            --arg macos_sig "$(cat sigs/Kurippa.app.tar.gz.sig)" \
+            --arg macos_url "${BASE_URL}/Kurippa_universal.app.tar.gz" \
+            --arg win_sig "$(cat sigs/windows.sig)" \
+            --arg win_url "${BASE_URL}/Kurippa_${VERSION}_x64-setup.nsis.zip" \
+            '{
+              version: $version,
+              notes: "",
+              pub_date: $pub_date,
+              platforms: {
+                "darwin-universal": { signature: $macos_sig, url: $macos_url },
+                "windows-x86_64":   { signature: $win_sig,   url: $win_url }
+              }
+            }' > latest.json
+
+          cat latest.json
+
+          gh release upload "v${VERSION}" latest.json \
+            --repo "${REPO}" --clobber
