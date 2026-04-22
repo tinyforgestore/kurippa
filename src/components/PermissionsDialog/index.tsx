@@ -8,7 +8,7 @@ interface Props {
 }
 
 export function PermissionsDialog({ onDone }: Props) {
-  const { dialogState, handleGetStarted, handleIveAddedIt, handleOpenSystemSettings, handleCheckAgain } =
+  const { dialogState, handleGetStarted, handleIveAddedIt, handleInputMonitoringDone, handleOpenSystemSettings, handleCheckAgain } =
     usePermissionsDialog(onDone);
 
   if (dialogState === "checking" || dialogState === "all_granted" || dialogState === "done") {
@@ -46,6 +46,9 @@ export function PermissionsDialog({ onDone }: Props) {
             <div className={body}>
               Click Allow when macOS asks if Kurippa can monitor keyboard input.
             </div>
+            <button className={primaryButton} onClick={handleInputMonitoringDone}>
+              I've allowed it
+            </button>
           </>
         )}
         {dialogState === "denied" && (

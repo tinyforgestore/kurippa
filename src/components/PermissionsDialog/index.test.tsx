@@ -7,6 +7,7 @@ import type { DialogState } from "@/hooks/usePermissionsDialog";
 const mockHandlers = {
   handleGetStarted: vi.fn(),
   handleIveAddedIt: vi.fn(),
+  handleInputMonitoringDone: vi.fn(),
   handleOpenSystemSettings: vi.fn(),
   handleCheckAgain: vi.fn(),
 };
@@ -53,6 +54,7 @@ describe("PermissionsDialog", () => {
     mockDialogState = "input_monitoring";
     render(createElement(PermissionsDialog, { onDone: vi.fn() }));
     expect(screen.getByText("Step 2 of 2 — Input Monitoring")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "I've allowed it" })).toBeInTheDocument();
   });
 
   it("renders denied screen with both buttons when dialogState is denied", () => {
@@ -88,6 +90,13 @@ describe("PermissionsDialog", () => {
     render(createElement(PermissionsDialog, { onDone: vi.fn() }));
     fireEvent.click(screen.getByRole("button", { name: "I've added it" }));
     expect(mockHandlers.handleIveAddedIt).toHaveBeenCalledOnce();
+  });
+
+  it("clicking I've allowed it calls handleInputMonitoringDone", () => {
+    mockDialogState = "input_monitoring";
+    render(createElement(PermissionsDialog, { onDone: vi.fn() }));
+    fireEvent.click(screen.getByRole("button", { name: "I've allowed it" }));
+    expect(mockHandlers.handleInputMonitoringDone).toHaveBeenCalledOnce();
   });
 
   it("clicking Open System Settings calls handleOpenSystemSettings", () => {
