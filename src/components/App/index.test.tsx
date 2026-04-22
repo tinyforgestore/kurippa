@@ -481,7 +481,9 @@ describe("App — keyboard navigation", () => {
     await waitFor(() => expect(screen.getByText("apple")).toBeInTheDocument());
 
     // Select second item
-    fireEvent.keyDown(document, { key: "ArrowDown" });
+    await act(async () => {
+      fireEvent.keyDown(document, { key: "ArrowDown" });
+    });
     let items = document.querySelectorAll("[data-item]");
     expect(items[1]).toHaveAttribute("data-selected");
 
