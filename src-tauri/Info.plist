@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>LSUIElement</key>
+    <true/>
+    <key>NSAccessibilityUsageDescription</key>
+    <string>Kurippa needs Accessibility access to paste into your previously active window.</string>
+    <key>NSInputMonitoringUsageDescription</key>
+    <string>Kurippa needs Input Monitoring access to detect the ⌘⇧V global hotkey while other apps are in focus.</string>
+</dict>
+</plist>

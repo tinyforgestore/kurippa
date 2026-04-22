@@ -251,7 +251,11 @@ pub fn run() {
             commands::get_license_info_cmd,
             commands::set_free_trial_cmd,
             commands::show_activation_window,
-            commands::finish_activation_cmd
+            commands::finish_activation_cmd,
+            commands::check_permissions,
+            commands::request_accessibility_permission,
+            commands::request_input_monitoring_permission,
+            commands::open_privacy_settings
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

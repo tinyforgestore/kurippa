@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { load } from "@tauri-apps/plugin-store";
 import { useAppState } from "@/hooks/useAppState";
 import { useTheme } from "@/hooks/useTheme";
@@ -10,11 +11,13 @@ import { PreviewPanel } from "@/components/PreviewPanel";
 import { Footer } from "@/components/Footer";
 import { UpdateBanner } from "@/components/UpdateBanner";
 import { UpgradeBanner } from "@/components/UpgradeBanner";
+import { PermissionsDialog, PermissionsStatus } from "@/components/PermissionsDialog";
 import { container, inlineToast, inlineToastGreen, mainColumn, reactivateBtn } from "@/components/App/index.css";
 
 function App() {
   const { theme } = useTheme();
   const { mode, openActivationWindow } = useLicense();
+  const [showPermissionsDialog, setShowPermissionsDialog] = useState(false);
   const [activatedToast, setActivatedToast] = useState(false);
   const [revokedBanner, setRevokedBanner] = useState(false);
   const [upgradeBannerFeature, setUpgradeBannerFeature] = useState<string | null>(null);
@@ -80,6 +83,16 @@ function App() {
   }, []);
 
   useEffect(() => {
+    invoke<PermissionsStatus>("check_permissions")
+      .then((status) => {
+        if (!status.accessibility || !status.input_monitoring) {
+          setShowPermissionsDialog(true);
+        }
+      })
+      .catch(console.error);
+  }, []);
+
+  useEffect(() => {
     checkStoreFlags();
   }, [checkStoreFlags]);
 
@@ -98,6 +111,8 @@ function App() {
   }
 
   return (
+    <>
+    {showPermissionsDialog && <PermissionsDialog onDone={() => setShowPermissionsDialog(false)} />}
     <div className={container}>
       <div className={mainColumn}>
         <Topbar
@@ -181,6 +196,7 @@ function App() {
       </div>
       {isPreviewOpen && <PreviewPanel item={selectedItem} previewOverride={pasteAsPreviewText} />}
     </div>
+    </>
   );
 }
 
