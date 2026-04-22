@@ -67,25 +67,29 @@ pub fn run() {
                 // rdev::Event has no position field; position lives inside
                 // EventType::MouseMove { x, y }.  We keep a running cursor
                 // position and snapshot it whenever a button is pressed.
-                let mut cursor: (f64, f64) = (0.0, 0.0);
-                let result = rdev::listen(move |event| {
-                    match event.event_type {
-                        rdev::EventType::MouseMove { x, y } => {
-                            cursor = (x, y);
-                        }
-                        rdev::EventType::ButtonPress(btn) => {
-                            log::debug!("[rdev] ButtonPress({:?}) at cursor=({:.1},{:.1})", btn, cursor.0, cursor.1);
-                            if let Ok(mut guard) = last_click_pos.lock() {
-                                *guard = Some(cursor);
-                                log::debug!("[rdev] last_click_pos saved: ({:.1},{:.1})", cursor.0, cursor.1);
-                            } else {
-                                log::warn!("[rdev] failed to lock last_click_pos");
+                // Restart automatically if the CGEventTap is invalidated.
+                loop {
+                    let click_pos = last_click_pos.clone();
+                    let mut cursor: (f64, f64) = (0.0, 0.0);
+                    let result = rdev::listen(move |event| {
+                        match event.event_type {
+                            rdev::EventType::MouseMove { x, y } => {
+                                cursor = (x, y);
                             }
+                            rdev::EventType::ButtonPress(btn) => {
+                                log::debug!("[rdev] ButtonPress({:?}) at cursor=({:.1},{:.1})", btn, cursor.0, cursor.1);
+                                if let Ok(mut guard) = click_pos.lock() {
+                                    *guard = Some(cursor);
+                                } else {
+                                    log::warn!("[rdev] failed to lock last_click_pos");
+                                }
+                            }
+                            _ => {}
                         }
-                        _ => {}
-                    }
-                });
-                log::warn!("[rdev] listener exited: {:?}", result);
+                    });
+                    log::warn!("[rdev] listener exited: {:?}, restarting in 1s", result);
+                    std::thread::sleep(std::time::Duration::from_secs(1));
+                }
             });
 
             // --- License / activation ---

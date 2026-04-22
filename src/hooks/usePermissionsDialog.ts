@@ -1,7 +1,14 @@
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 
-const STORAGE_KEY = "kurippa.permissions.intro.shown";
+// Set once the intro slide has been shown (permissions may not yet be granted).
+const INTRO_SHOWN_KEY = "kurippa.permissions.intro.shown";
+// Set once the user completes the guided setup. On subsequent launches, if
+// check_permissions reports missing permissions, this key overrides the result
+// so the dialog is not shown again — AXIsProcessTrusted returns false for dev
+// binaries even when the toggle is ON. In production, if the user genuinely
+// revokes permissions, they can reset this from Settings → Reset Permissions.
+const COMPLETED_KEY = "kurippa.permissions.completed";
 
 export type DialogState =
   | "checking"
@@ -34,7 +41,11 @@ export function usePermissionsDialog(onDone: () => void): {
           setDialogState("all_granted");
           return;
         }
-        const introShown = localStorage.getItem(STORAGE_KEY) !== null;
+        if (localStorage.getItem(COMPLETED_KEY) !== null) {
+          setDialogState("all_granted");
+          return;
+        }
+        const introShown = localStorage.getItem(INTRO_SHOWN_KEY) !== null;
         if (!introShown) {
           setDialogState("intro");
         } else if (!status.accessibility) {
@@ -47,7 +58,14 @@ export function usePermissionsDialog(onDone: () => void): {
   }, []);
 
   useEffect(() => {
-    if (dialogState === "all_granted" || dialogState === "done") {
+    if (dialogState === "done") {
+      // User completed the guided setup — persist so dev-build hash changes
+      // don't re-show the dialog on subsequent launches.
+      localStorage.setItem(COMPLETED_KEY, "1");
+      onDone();
+    } else if (dialogState === "all_granted") {
+      // Permissions already active — call onDone without persisting; we still
+      // re-check on next launch in case the user revokes them.
       onDone();
     }
   }, [dialogState, onDone]);
@@ -64,7 +82,7 @@ export function usePermissionsDialog(onDone: () => void): {
   }, [dialogState]);
 
   const handleGetStarted = () => {
-    localStorage.setItem(STORAGE_KEY, "1");
+    localStorage.setItem(INTRO_SHOWN_KEY, "1");
     setDialogState("accessibility");
   };
 
