@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import appIcon from "@/assets/icon.png";
+import { version } from "@pkg";
 import { useLicense } from "@/hooks/useLicense";
 import { sectionTitle, aboutCard, aboutIcon, aboutName, aboutVer, aboutBuilt, link, divider, rowLabel, rowDesc, rowError, addBtn, deactivateConfirmRow } from "./index.css";
 import { vars } from "@/theme.css";
@@ -28,7 +29,7 @@ export function AboutTab() {
           <img src={appIcon} width={36} height={36} draggable={false} />
         </div>
         <div className={aboutName}>Kurippa</div>
-        <div className={aboutVer}>Version 0.1.0</div>
+        <div className={aboutVer}>Version {version}</div>
         <div className={aboutBuilt}>Built with Tauri + Rust by TinyForge</div>
         <a
           className={link}

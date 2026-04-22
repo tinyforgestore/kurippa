@@ -13,6 +13,7 @@ export default defineConfig(async () => ({
   resolve: {
     alias: {
       "@": resolve(__dirname, "src"),
+      "@pkg": resolve(__dirname, "package.json"),
     },
   },
 

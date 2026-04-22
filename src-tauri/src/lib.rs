@@ -194,10 +194,10 @@ pub fn run() {
                                 let _ = app_handle.emit("update-available", version);
                             }
                             Ok(None) => {}
-                            Err(e) => eprintln!("[updater] check failed: {e}"),
+                            Err(e) => log::warn!("[updater] check failed: {e}"),
                         }
                     }
-                    Err(e) => eprintln!("[updater] init failed: {e}"),
+                    Err(e) => log::warn!("[updater] init failed: {e}"),
                 }
             });
 

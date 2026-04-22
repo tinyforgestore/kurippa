@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { createElement } from "react";
 import { SettingsApp } from "@/components/Settings/index";
 import type { AppSettings } from "@/types/settings";
+import { version } from "@pkg";
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -117,7 +118,7 @@ describe("SettingsApp", () => {
       renderSettings();
       fireEvent.click(screen.getByRole("tab", { name: /about/i }));
       expect(screen.getByText("Kurippa")).toBeTruthy();
-      expect(screen.getByText("Version 0.1.0")).toBeTruthy();
+      expect(screen.getByText(`Version ${version}`)).toBeTruthy();
     });
 
     it("clicking a tab sets it as selected (aria-selected)", () => {

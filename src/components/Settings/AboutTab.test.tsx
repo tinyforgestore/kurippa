@@ -2,6 +2,7 @@ import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { createElement } from "react";
 import { AboutTab } from "@/components/Settings/AboutTab";
+import { version } from "@pkg";
 
 // ---------------------------------------------------------------------------
 // Mocks
@@ -77,9 +78,9 @@ describe("AboutTab", () => {
       expect(screen.getByText("Kurippa")).toBeTruthy();
     });
 
-    it("renders the version string", () => {
+    it("renders the version string from package.json", () => {
       renderAboutTab();
-      expect(screen.getByText("Version 0.1.0")).toBeTruthy();
+      expect(screen.getByText(`Version ${version}`)).toBeTruthy();
     });
 
     it("renders the tinyforge link", () => {
