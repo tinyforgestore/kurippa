@@ -14,70 +14,61 @@ describe("usePermissionsDialog", () => {
   beforeEach(() => {
     localStorage.clear();
     vi.clearAllMocks();
+    mockInvoke.mockResolvedValue(undefined);
   });
 
   it("calls onDone immediately when both permissions are granted", async () => {
-    mockInvoke.mockResolvedValue({ accessibility: true, input_monitoring: true });
+    mockInvoke.mockResolvedValueOnce({ accessibility: true, input_monitoring: true });
     const onDone = vi.fn();
     renderHook(() => usePermissionsDialog(onDone));
     await waitFor(() => expect(onDone).toHaveBeenCalledOnce());
   });
 
   it("returns dialogState === intro when no localStorage key and permissions missing", async () => {
-    mockInvoke.mockResolvedValue({ accessibility: false, input_monitoring: false });
+    mockInvoke.mockResolvedValueOnce({ accessibility: false, input_monitoring: false });
     const { result } = renderHook(() => usePermissionsDialog(vi.fn()));
     await waitFor(() => expect(result.current.dialogState).toBe("intro"));
   });
 
   it("returns dialogState === accessibility when localStorage key present and accessibility missing", async () => {
     localStorage.setItem(STORAGE_KEY, "1");
-    mockInvoke.mockResolvedValue({ accessibility: false, input_monitoring: false });
+    mockInvoke.mockResolvedValueOnce({ accessibility: false, input_monitoring: false });
     const { result } = renderHook(() => usePermissionsDialog(vi.fn()));
     await waitFor(() => expect(result.current.dialogState).toBe("accessibility"));
   });
 
-  it("handleGetStarted sets localStorage key and transitions to accessibility when not granted", async () => {
-    mockInvoke
-      .mockResolvedValueOnce({ accessibility: false, input_monitoring: false })
-      .mockImplementation(() => new Promise(() => {}));
+  it("returns dialogState === denied when localStorage key present and only input_monitoring missing", async () => {
+    localStorage.setItem(STORAGE_KEY, "1");
+    mockInvoke.mockResolvedValueOnce({ accessibility: true, input_monitoring: false });
+    const { result } = renderHook(() => usePermissionsDialog(vi.fn()));
+    await waitFor(() => expect(result.current.dialogState).toBe("denied"));
+  });
+
+  it("handleGetStarted sets localStorage key and transitions to accessibility", async () => {
+    mockInvoke.mockResolvedValueOnce({ accessibility: false, input_monitoring: false });
     const { result } = renderHook(() => usePermissionsDialog(vi.fn()));
     await waitFor(() => expect(result.current.dialogState).toBe("intro"));
     act(() => result.current.handleGetStarted());
     expect(localStorage.getItem(STORAGE_KEY)).toBe("1");
-    expect(result.current.dialogState).toBe("accessibility");
+    await waitFor(() => expect(result.current.dialogState).toBe("accessibility"));
   });
 
-  it("handleGetStarted transitions to input_monitoring when accessibility already granted", async () => {
+  it("handleIveAddedIt triggers input monitoring request and transitions to done", async () => {
     localStorage.setItem(STORAGE_KEY, "1");
-    mockInvoke
-      .mockResolvedValueOnce({ accessibility: true, input_monitoring: false })
-      .mockImplementation(() => new Promise(() => {}));
-    const { result } = renderHook(() => usePermissionsDialog(vi.fn()));
-    await waitFor(() => expect(result.current.dialogState).toBe("input_monitoring"));
-    act(() => result.current.handleGetStarted());
-    expect(result.current.dialogState).toBe("input_monitoring");
-  });
-
-  it("handleIveAddedIt transitions to input_monitoring", async () => {
-    localStorage.setItem(STORAGE_KEY, "1");
-    mockInvoke
-      .mockResolvedValueOnce({ accessibility: false, input_monitoring: false })
-      .mockResolvedValueOnce(undefined)
-      .mockImplementation(() => new Promise(() => {}));
-    const { result } = renderHook(() => usePermissionsDialog(vi.fn()));
+    mockInvoke.mockResolvedValueOnce({ accessibility: false, input_monitoring: false });
+    const onDone = vi.fn();
+    const { result } = renderHook(() => usePermissionsDialog(onDone));
     await waitFor(() => expect(result.current.dialogState).toBe("accessibility"));
     act(() => result.current.handleIveAddedIt());
-    expect(result.current.dialogState).toBe("input_monitoring");
+    await waitFor(() => expect(onDone).toHaveBeenCalledOnce());
+    expect(mockInvoke).toHaveBeenCalledWith("request_input_monitoring_permission");
   });
 
   it("handleOpenSystemSettings calls invoke open_privacy_settings", async () => {
     localStorage.setItem(STORAGE_KEY, "1");
-    mockInvoke
-      .mockResolvedValueOnce({ accessibility: true, input_monitoring: false })
-      .mockResolvedValueOnce(false);
+    mockInvoke.mockResolvedValueOnce({ accessibility: true, input_monitoring: false });
     const { result } = renderHook(() => usePermissionsDialog(vi.fn()));
     await waitFor(() => expect(result.current.dialogState).toBe("denied"));
-    mockInvoke.mockResolvedValueOnce(undefined);
     await act(async () => result.current.handleOpenSystemSettings());
     expect(mockInvoke).toHaveBeenCalledWith("open_privacy_settings");
   });
@@ -86,7 +77,6 @@ describe("usePermissionsDialog", () => {
     localStorage.setItem(STORAGE_KEY, "1");
     mockInvoke
       .mockResolvedValueOnce({ accessibility: true, input_monitoring: false })
-      .mockResolvedValueOnce(false)
       .mockResolvedValueOnce({ accessibility: true, input_monitoring: true });
     const onDone = vi.fn();
     const { result } = renderHook(() => usePermissionsDialog(onDone));
@@ -99,7 +89,6 @@ describe("usePermissionsDialog", () => {
     localStorage.setItem(STORAGE_KEY, "1");
     mockInvoke
       .mockResolvedValueOnce({ accessibility: true, input_monitoring: false })
-      .mockResolvedValueOnce(false)
       .mockResolvedValueOnce({ accessibility: true, input_monitoring: false });
     const { result } = renderHook(() => usePermissionsDialog(vi.fn()));
     await waitFor(() => expect(result.current.dialogState).toBe("denied"));
@@ -107,26 +96,18 @@ describe("usePermissionsDialog", () => {
     expect(result.current.dialogState).toBe("denied");
   });
 
-  it("request_input_monitoring_permission returning true transitions to done and calls onDone", async () => {
+  it("handleCheckAgain transitions to error when check_permissions fails", async () => {
     localStorage.setItem(STORAGE_KEY, "1");
     mockInvoke
       .mockResolvedValueOnce({ accessibility: true, input_monitoring: false })
-      .mockResolvedValueOnce(true);
-    const onDone = vi.fn();
-    renderHook(() => usePermissionsDialog(onDone));
-    await waitFor(() => expect(onDone).toHaveBeenCalledOnce());
-  });
-
-  it("request_input_monitoring_permission returning false transitions to denied", async () => {
-    localStorage.setItem(STORAGE_KEY, "1");
-    mockInvoke
-      .mockResolvedValueOnce({ accessibility: true, input_monitoring: false })
-      .mockResolvedValueOnce(false);
+      .mockRejectedValueOnce(new Error("IPC error"));
     const { result } = renderHook(() => usePermissionsDialog(vi.fn()));
     await waitFor(() => expect(result.current.dialogState).toBe("denied"));
+    await act(async () => result.current.handleCheckAgain());
+    await waitFor(() => expect(result.current.dialogState).toBe("error"));
   });
 
-  it("check_permissions failing transitions to error", async () => {
+  it("check_permissions failing on startup transitions to error", async () => {
     mockInvoke.mockRejectedValueOnce(new Error("IPC error"));
     const { result } = renderHook(() => usePermissionsDialog(vi.fn()));
     await waitFor(() => expect(result.current.dialogState).toBe("error"));

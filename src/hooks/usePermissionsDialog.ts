@@ -26,7 +26,6 @@ export function usePermissionsDialog(onDone: () => void): {
   handleCheckAgain: () => void;
 } {
   const [dialogState, setDialogState] = useState<DialogState>("checking");
-  const [accessibilityGranted, setAccessibilityGranted] = useState(false);
 
   useEffect(() => {
     invoke<PermissionsStatus>("check_permissions")
@@ -41,8 +40,7 @@ export function usePermissionsDialog(onDone: () => void): {
         } else if (!status.accessibility) {
           setDialogState("accessibility");
         } else {
-          setAccessibilityGranted(true);
-          setDialogState("input_monitoring");
+          setDialogState("denied");
         }
       })
       .catch(() => setDialogState("error"));
@@ -61,24 +59,16 @@ export function usePermissionsDialog(onDone: () => void): {
 
   useEffect(() => {
     if (dialogState !== "input_monitoring") return;
-    invoke<boolean>("request_input_monitoring_permission")
-      .then((granted) => {
-        setDialogState(granted ? "done" : "denied");
-      })
-      .catch(console.error);
+    invoke("request_input_monitoring_permission").catch(console.error);
+    setDialogState("done");
   }, [dialogState]);
 
   const handleGetStarted = () => {
     localStorage.setItem(STORAGE_KEY, "1");
-    if (!accessibilityGranted) {
-      setDialogState("accessibility");
-    } else {
-      setDialogState("input_monitoring");
-    }
+    setDialogState("accessibility");
   };
 
   const handleIveAddedIt = () => {
-    setAccessibilityGranted(true);
     setDialogState("input_monitoring");
   };
 

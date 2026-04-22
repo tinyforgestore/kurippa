@@ -8,5 +8,9 @@
     <string>Kurippa needs Accessibility access to paste into your previously active window.</string>
     <key>NSInputMonitoringUsageDescription</key>
     <string>Kurippa needs Input Monitoring access to detect the ⌘⇧V global hotkey while other apps are in focus.</string>
+    <key>CFBundleLocalizations</key>
+    <array>
+        <string>ja</string>
+    </array>
 </dict>
 </plist>
