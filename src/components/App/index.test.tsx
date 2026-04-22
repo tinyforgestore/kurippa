@@ -198,7 +198,9 @@ describe("App — dismiss behaviour", () => {
     await waitFor(() => expect(screen.getByText("first")).toBeInTheDocument());
 
     // Navigate down to index 1
-    fireEvent.keyDown(document, { key: "ArrowDown" });
+    await act(async () => {
+      fireEvent.keyDown(document, { key: "ArrowDown" });
+    });
     let items = document.querySelectorAll("[data-item]");
     expect(items[1]).toHaveAttribute("data-selected");
 
@@ -366,7 +368,9 @@ describe("App — keyboard navigation", () => {
     renderApp();
     await waitFor(() => expect(screen.getByText("first")).toBeInTheDocument());
 
-    fireEvent.keyDown(document, { key: "ArrowDown" });
+    await act(async () => {
+      fireEvent.keyDown(document, { key: "ArrowDown" });
+    });
 
     const items = document.querySelectorAll("[data-item]");
     expect(items[0]).not.toHaveAttribute("data-selected");
@@ -380,9 +384,11 @@ describe("App — keyboard navigation", () => {
     await waitFor(() => expect(screen.getByText("first")).toBeInTheDocument());
 
     // Move down twice, then back up once
-    fireEvent.keyDown(document, { key: "ArrowDown" });
-    fireEvent.keyDown(document, { key: "ArrowDown" });
-    fireEvent.keyDown(document, { key: "ArrowUp" });
+    await act(async () => {
+      fireEvent.keyDown(document, { key: "ArrowDown" });
+      fireEvent.keyDown(document, { key: "ArrowDown" });
+      fireEvent.keyDown(document, { key: "ArrowUp" });
+    });
 
     const items = document.querySelectorAll("[data-item]");
     expect(items[1]).toHaveAttribute("data-selected");
@@ -394,8 +400,10 @@ describe("App — keyboard navigation", () => {
     renderApp();
     await waitFor(() => expect(screen.getByText("only")).toBeInTheDocument());
 
-    fireEvent.keyDown(document, { key: "ArrowDown" });
-    fireEvent.keyDown(document, { key: "ArrowDown" });
+    await act(async () => {
+      fireEvent.keyDown(document, { key: "ArrowDown" });
+      fireEvent.keyDown(document, { key: "ArrowDown" });
+    });
 
     const items = document.querySelectorAll("[data-item]");
     expect(items[0]).toHaveAttribute("data-selected");
@@ -407,8 +415,10 @@ describe("App — keyboard navigation", () => {
     renderApp();
     await waitFor(() => expect(screen.getByText("first")).toBeInTheDocument());
 
-    fireEvent.keyDown(document, { key: "ArrowUp" });
-    fireEvent.keyDown(document, { key: "ArrowUp" });
+    await act(async () => {
+      fireEvent.keyDown(document, { key: "ArrowUp" });
+      fireEvent.keyDown(document, { key: "ArrowUp" });
+    });
 
     const items = document.querySelectorAll("[data-item]");
     expect(items[0]).toHaveAttribute("data-selected");
@@ -422,14 +432,14 @@ describe("App — keyboard navigation", () => {
     await waitFor(() => expect(screen.getByText("first")).toBeInTheDocument());
 
     // Navigate to second item and press Enter
-    fireEvent.keyDown(document, { key: "ArrowDown" });
-    fireEvent.keyDown(document, { key: "Enter" });
+    await act(async () => { fireEvent.keyDown(document, { key: "ArrowDown" }); });
+    await act(async () => { fireEvent.keyDown(document, { key: "Enter" }); });
 
-    expect(mockInvoke).toHaveBeenCalledWith("paste_item", {
+    await waitFor(() => expect(mockInvoke).toHaveBeenCalledWith("paste_item", {
       text: "second",
       plainText: false,
       itemId: 2,
-    });
+    }));
   });
 
   it("Shift+Enter opens the PasteAs menu (does not call paste_item)", async () => {
@@ -610,7 +620,7 @@ describe("App — keyboard navigation", () => {
     await waitFor(() => expect(screen.getByText("hello")).toBeInTheDocument());
 
     // Open Paste As menu
-    fireEvent.keyDown(document, { key: "Enter", shiftKey: true });
+    await act(async () => { fireEvent.keyDown(document, { key: "Enter", shiftKey: true }); });
     await waitFor(() => expect(screen.getByText(/Paste as…/)).toBeInTheDocument());
 
     mockInvoke.mockClear();
@@ -649,7 +659,7 @@ describe("App — keyboard navigation", () => {
     await waitFor(() => expect(document.querySelector("[data-item]")).toBeInTheDocument());
 
     // Open Paste As menu
-    fireEvent.keyDown(document, { key: "Enter", shiftKey: true });
+    await act(async () => { fireEvent.keyDown(document, { key: "Enter", shiftKey: true }); });
     await waitFor(() => expect(screen.getByText(/Paste as…/)).toBeInTheDocument());
 
     mockInvoke.mockClear();
