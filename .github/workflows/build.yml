@@ -74,6 +74,7 @@ jobs:
         with:
           releaseId: ${{ needs.create-release.outputs.release_id }}
           args: --target universal-apple-darwin
+          updaterJsonKeepUniversal: true
 
       - name: Rename macOS artifact to stable name
         env:
