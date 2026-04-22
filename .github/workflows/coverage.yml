@@ -4,6 +4,8 @@ on:
   push:
     branches: [main]
 
+run-name: "Coverage — ${{ github.ref_name }}@${{ github.sha }}"
+
 permissions:
   contents: write
 
