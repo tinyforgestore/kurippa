@@ -44,7 +44,7 @@ export function useApp() {
   useEffect(() => {
     invoke<PermissionsStatus>("check_permissions")
       .then((status) => {
-        if (!status.accessibility || !status.input_monitoring) {
+        if (!status.accessibility) {
           setShowPermissionsDialog(true);
         }
       })

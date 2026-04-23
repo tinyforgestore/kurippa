@@ -40,7 +40,7 @@ vi.mock("@tauri-apps/api/core", () => ({
   invoke: (cmd: string, ...args: unknown[]) => {
     if (cmd === "get_settings") return Promise.resolve(defaultSettings);
     if (cmd === "get_folders") return Promise.resolve([]);
-    if (cmd === "check_permissions") return Promise.resolve({ accessibility: true, input_monitoring: true });
+    if (cmd === "check_permissions") return Promise.resolve({ accessibility: true });
     return mockInvoke(cmd, ...args);
   },
 }));

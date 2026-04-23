@@ -9,7 +9,6 @@ mod window;
 use commands::UpdaterState;
 use db::DbState;
 use std::sync::{Arc, Mutex};
-use std::sync::atomic::{AtomicU64, Ordering};
 use tauri::{
     tray::{MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent},
     Emitter, Manager,
@@ -58,44 +57,6 @@ pub fn run() {
             let conn = db::open(&db_path).expect("could not open database");
             let db_state: DbState = Arc::new(Mutex::new(conn));
             app.manage(db_state.clone());
-
-            // --- Last-click position tracker (rdev) ---
-            // Track the last global mouse-click position for monitor selection.
-            // Use AtomicU64 (via f64::to_bits) so the CGEventTap callback never
-            // blocks on a Mutex — a blocking callback causes macOS to disable the tap.
-            // u64::MAX is the sentinel meaning "no position recorded yet".
-            let last_click_x = Arc::new(AtomicU64::new(u64::MAX));
-            let last_click_y = Arc::new(AtomicU64::new(u64::MAX));
-            app.manage(window::LastClickPos(last_click_x.clone(), last_click_y.clone()));
-            std::thread::spawn(move || {
-                log::info!("[rdev] listener thread started");
-                // Track the current cursor position on every MouseMove so that
-                // position_window can place the popup exactly where the cursor is
-                // when the hotkey fires — independent of whether the user has clicked.
-                // Restart automatically if the CGEventTap is invalidated.
-                // Exponential backoff: start at 1s, double each failure, cap at 30s.
-                // Reset to 1s after a successful run that lasted more than 5 seconds.
-                let mut backoff = std::time::Duration::from_secs(1);
-                loop {
-                    let click_x = last_click_x.clone();
-                    let click_y = last_click_y.clone();
-                    let start = std::time::Instant::now();
-                    let result = rdev::listen(move |event| {
-                        if let rdev::EventType::MouseMove { x, y } = event.event_type {
-                            click_x.store(x.to_bits(), Ordering::Relaxed);
-                            click_y.store(y.to_bits(), Ordering::Relaxed);
-                        }
-                    });
-                    let elapsed = start.elapsed();
-                    if elapsed > std::time::Duration::from_secs(5) {
-                        // Tap survived long enough — considered a normal exit; reset backoff.
-                        backoff = std::time::Duration::from_secs(1);
-                    }
-                    log::warn!("[rdev] listener exited: {:?}, restarting in {:?}", result, backoff);
-                    std::thread::sleep(backoff);
-                    backoff = (backoff * 2).min(std::time::Duration::from_secs(30));
-                }
-            });
 
             // --- License / activation ---
             let is_act = license::is_activated(app.handle());
@@ -263,7 +224,6 @@ pub fn run() {
             commands::finish_activation_cmd,
             commands::check_permissions,
             commands::request_accessibility_permission,
-            commands::request_input_monitoring_permission,
             commands::open_privacy_settings
         ])
         .run(tauri::generate_context!())

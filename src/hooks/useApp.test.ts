@@ -60,27 +60,21 @@ describe("useApp", () => {
 
   // Permissions dialog
 
-  it("showPermissionsDialog is false when both permissions are granted", async () => {
-    mockInvoke.mockResolvedValueOnce({ accessibility: true, input_monitoring: true });
+  it("showPermissionsDialog is false when accessibility is granted", async () => {
+    mockInvoke.mockResolvedValueOnce({ accessibility: true });
     const { result } = renderHook(() => useApp());
     await waitFor(() => expect(mockInvoke).toHaveBeenCalledWith("check_permissions"));
     expect(result.current.showPermissionsDialog).toBe(false);
   });
 
   it("showPermissionsDialog is true when accessibility is missing", async () => {
-    mockInvoke.mockResolvedValueOnce({ accessibility: false, input_monitoring: true });
-    const { result } = renderHook(() => useApp());
-    await waitFor(() => expect(result.current.showPermissionsDialog).toBe(true));
-  });
-
-  it("showPermissionsDialog is true when input_monitoring is missing", async () => {
-    mockInvoke.mockResolvedValueOnce({ accessibility: true, input_monitoring: false });
+    mockInvoke.mockResolvedValueOnce({ accessibility: false });
     const { result } = renderHook(() => useApp());
     await waitFor(() => expect(result.current.showPermissionsDialog).toBe(true));
   });
 
   it("onPermissionsDone hides the permissions dialog", async () => {
-    mockInvoke.mockResolvedValueOnce({ accessibility: false, input_monitoring: false });
+    mockInvoke.mockResolvedValueOnce({ accessibility: false });
     const { result } = renderHook(() => useApp());
     await waitFor(() => expect(result.current.showPermissionsDialog).toBe(true));
     act(() => result.current.onPermissionsDone());
@@ -90,7 +84,7 @@ describe("useApp", () => {
   // Store flags — activated toast
 
   it("activatedToast is true when just_activated flag is set in store", async () => {
-    mockInvoke.mockResolvedValueOnce({ accessibility: true, input_monitoring: true });
+    mockInvoke.mockResolvedValueOnce({ accessibility: true });
     mockStore.get.mockImplementation((key: string) => {
       if (key === "just_activated") return Promise.resolve(true);
       return Promise.resolve(null);
@@ -103,7 +97,7 @@ describe("useApp", () => {
   // Store flags — revoked banner
 
   it("revokedBanner is true when license_revoked flag is set in store", async () => {
-    mockInvoke.mockResolvedValueOnce({ accessibility: true, input_monitoring: true });
+    mockInvoke.mockResolvedValueOnce({ accessibility: true });
     mockStore.get.mockImplementation((key: string) => {
       if (key === "license_revoked") return Promise.resolve(true);
       return Promise.resolve(null);
@@ -115,7 +109,7 @@ describe("useApp", () => {
   // Upgrade banner
 
   it("dismissUpgradeBanner clears upgradeBannerFeature", async () => {
-    mockInvoke.mockResolvedValueOnce({ accessibility: true, input_monitoring: true });
+    mockInvoke.mockResolvedValueOnce({ accessibility: true });
     const { result } = renderHook(() => useApp());
     await waitFor(() => expect(mockInvoke).toHaveBeenCalledWith("check_permissions"));
     // Simulate feature being set via onTrialError (exposed as part of useAppState mock)
@@ -128,7 +122,7 @@ describe("useApp", () => {
   // visibilitychange re-runs checkStoreFlags
 
   it("visibilitychange to visible re-checks store flags", async () => {
-    mockInvoke.mockResolvedValueOnce({ accessibility: true, input_monitoring: true });
+    mockInvoke.mockResolvedValueOnce({ accessibility: true });
     mockStore.get.mockResolvedValue(null);
     renderHook(() => useApp());
     await waitFor(() => expect(mockInvoke).toHaveBeenCalledWith("check_permissions"));

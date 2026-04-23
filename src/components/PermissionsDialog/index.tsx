@@ -8,7 +8,7 @@ interface Props {
 }
 
 export function PermissionsDialog({ onDone }: Props) {
-  const { dialogState, handleGetStarted, handleIveAddedIt, handleInputMonitoringDone, handleOpenSystemSettings, handleCheckAgain } =
+  const { dialogState, handleGetStarted, handleIveAddedIt, handleOpenSystemSettings, handleCheckAgain } =
     usePermissionsDialog(onDone);
 
   if (dialogState === "checking" || dialogState === "all_granted" || dialogState === "done") {
@@ -22,7 +22,7 @@ export function PermissionsDialog({ onDone }: Props) {
           <>
             <div className={title}>Before we start</div>
             <div className={body}>
-              {"Kurippa needs two permissions to work properly.\n\nAccessibility — to paste into your previously active window.\n\nInput Monitoring — to detect the ⌘⇧V hotkey while other apps are focused."}
+              {"Kurippa needs one permission to work properly.\n\nAccessibility — to paste into your previously active window."}
             </div>
             <button className={primaryButton} onClick={handleGetStarted}>
               Get Started
@@ -31,7 +31,7 @@ export function PermissionsDialog({ onDone }: Props) {
         )}
         {dialogState === "accessibility" && (
           <>
-            <div className={title}>Step 1 of 2 — Accessibility</div>
+            <div className={title}>Enable Accessibility</div>
             <div className={body}>
               Kurippa has opened System Settings. Under Accessibility, click + and add Kurippa from your Applications folder.
             </div>
@@ -40,22 +40,11 @@ export function PermissionsDialog({ onDone }: Props) {
             </button>
           </>
         )}
-        {dialogState === "input_monitoring" && (
-          <>
-            <div className={title}>Step 2 of 2 — Input Monitoring</div>
-            <div className={body}>
-              Click Allow when macOS asks if Kurippa can monitor keyboard input.
-            </div>
-            <button className={primaryButton} onClick={handleInputMonitoringDone}>
-              I've allowed it
-            </button>
-          </>
-        )}
         {dialogState === "denied" && (
           <>
             <div className={title}>Permissions needed</div>
             <div className={body}>
-              Kurippa can't fully function without both permissions. Open System Settings → Privacy & Security and enable Accessibility and Input Monitoring for Kurippa.
+              Kurippa can't fully function without Accessibility. Open System Settings → Privacy & Security and enable Accessibility for Kurippa.
             </div>
             <button className={primaryButton} onClick={handleOpenSystemSettings}>
               Open System Settings
