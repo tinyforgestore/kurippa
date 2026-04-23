@@ -223,7 +223,7 @@ describe("App — dismiss behaviour", () => {
     await waitFor(() => expect(screen.getByText("rich text item")).toBeInTheDocument());
 
     // Open the Paste As menu
-    fireEvent.keyDown(document, { key: "Enter", shiftKey: true });
+    await act(async () => { fireEvent.keyDown(document, { key: "Enter", shiftKey: true }); });
     await waitFor(() => expect(screen.getByText(/Paste as…/)).toBeInTheDocument());
 
     // Fire focus gained callback
@@ -449,7 +449,7 @@ describe("App — keyboard navigation", () => {
     renderApp();
     await waitFor(() => expect(screen.getByText("rich text item")).toBeInTheDocument());
 
-    fireEvent.keyDown(document, { key: "Enter", shiftKey: true });
+    await act(async () => { fireEvent.keyDown(document, { key: "Enter", shiftKey: true }); });
 
     // PasteAs menu should appear; paste_item should NOT have been called
     await waitFor(() => expect(screen.getByText(/Paste as…/)).toBeInTheDocument());
