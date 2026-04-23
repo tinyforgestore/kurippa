@@ -3,6 +3,12 @@ name: Coverage
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - 'coverage.json'
+
+concurrency:
+  group: coverage-${{ github.ref }}
+  cancel-in-progress: true
 
 run-name: "Coverage — ${{ github.ref_name }}@${{ github.sha }}"
 

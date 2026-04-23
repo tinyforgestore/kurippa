@@ -34,6 +34,8 @@ import {
   autoCloseBar,
 } from "./index.css";
 
+const BUY_URL = "https://tinyforge.store/l/kurippa";
+
 interface ActivationDetails {
   planName: string;
   emailMasked: string;
@@ -319,7 +321,7 @@ export function LicenseActivation() {
       <div className={buyRow}>
         <button
           className={buyBtnPrimary}
-          onClick={() => openUrl("https://tinyforge.store/l/kurippa").catch(console.error)}
+          onClick={() => openUrl(BUY_URL).catch(console.error)}
         >
           Buy Kurippa →
         </button>

@@ -1,21 +1,30 @@
 import { useEffect, useRef, useState } from "react";
 import { darkTheme, lightTheme } from "@/theme.css";
 
-export type Theme = "dark" | "light";
+export type Theme = "dark" | "light" | "system";
 
-const THEME_CLASSES: Record<Theme, string> = {
+const THEME_CLASSES: Record<"dark" | "light", string> = {
   dark: darkTheme,
   light: lightTheme,
 };
 
 function getStoredTheme(): Theme {
   const stored = localStorage.getItem("theme");
-  return stored === "light" ? "light" : "dark";
+  if (stored === "dark" || stored === "light" || stored === "system") return stored;
+  return "system";
+}
+
+export function getEffectiveTheme(theme: Theme): "dark" | "light" {
+  if (theme === "system") {
+    return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+  }
+  return theme;
 }
 
 function applyThemeClass(theme: Theme) {
-  const add = THEME_CLASSES[theme];
-  const remove = THEME_CLASSES[theme === "dark" ? "light" : "dark"];
+  const effective = getEffectiveTheme(theme);
+  const add = THEME_CLASSES[effective];
+  const remove = THEME_CLASSES[effective === "dark" ? "light" : "dark"];
   document.documentElement.classList.remove(remove);
   document.documentElement.classList.add(add);
 }
@@ -40,8 +49,18 @@ export function useTheme() {
     hasMounted.current = true;
 
     import("@tauri-apps/api/app")
-      .then(({ setTheme }) => setTheme(theme))
+      .then(({ setTheme }) => setTheme(theme === "system" ? null : theme))
       .catch(() => {});
+  }, [theme]);
+
+  // OS preference listener — only active when theme is "system"
+  useEffect(() => {
+    if (theme !== "system") return;
+
+    const mql = window.matchMedia("(prefers-color-scheme: dark)");
+    const handleChange = () => applyThemeClass("system");
+    mql.addEventListener("change", handleChange);
+    return () => mql.removeEventListener("change", handleChange);
   }, [theme]);
 
   // Re-sync from localStorage whenever this window becomes visible (e.g. shown via global hotkey).
@@ -66,7 +85,9 @@ export function useTheme() {
     import("@tauri-apps/api/event")
       .then(({ listen }) =>
         listen<Theme>("theme-changed", (event) => {
-          const incoming = event.payload === "light" ? "light" : "dark";
+          const payload = event.payload;
+          const incoming: Theme =
+            payload === "light" || payload === "dark" || payload === "system" ? payload : "system";
           isExternalUpdate.current = true;
           applyThemeClass(incoming);
           setThemeState(incoming);

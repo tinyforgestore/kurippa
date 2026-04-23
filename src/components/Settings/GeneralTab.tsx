@@ -26,6 +26,7 @@ const MULTI_PASTE_OPTIONS: { value: MultiPasteSeparator; label: string }[] = [
 ];
 
 const THEME_OPTIONS: { value: Theme; label: string }[] = [
+  { value: "system", label: "System" },
   { value: "dark", label: "Dark" },
   { value: "light", label: "Light" },
 ];
