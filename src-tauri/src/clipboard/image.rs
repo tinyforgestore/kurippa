@@ -163,6 +163,16 @@ pub fn finalize_image(
     }
 }
 
+/// Returns true if `name` is a safe image filename: no path separators, no null
+/// bytes, and must end with the `.png` extension.
+fn is_safe_image_filename(name: &str) -> bool {
+    !name.is_empty()
+        && !name.contains('/')
+        && !name.contains('\\')
+        && !name.contains('\0')
+        && name.ends_with(".png")
+}
+
 /// Deletes evicted image files from the images directory.
 pub fn cleanup_evicted(app: &tauri::AppHandle, filenames: &[String]) {
     if filenames.is_empty() {
@@ -171,11 +181,7 @@ pub fn cleanup_evicted(app: &tauri::AppHandle, filenames: &[String]) {
     if let Ok(images_dir) = app.path().app_data_dir().map(|d| d.join("images")) {
         for filename in filenames {
             // Validate: reject paths that escape the images directory.
-            if !filename.contains('/')
-                && !filename.contains('\\')
-                && !filename.contains('\0')
-                && filename.ends_with(".png")
-            {
+            if is_safe_image_filename(filename) {
                 let _ = std::fs::remove_file(images_dir.join(filename));
             }
         }
@@ -185,6 +191,60 @@ pub fn cleanup_evicted(app: &tauri::AppHandle, filenames: &[String]) {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    // ------------------------------------------------------------------ //
+    // is_safe_image_filename
+    // ------------------------------------------------------------------ //
+
+    #[test]
+    fn safe_filename_numeric_png() {
+        assert!(is_safe_image_filename("42.png"));
+    }
+
+    #[test]
+    fn safe_filename_alpha_png() {
+        assert!(is_safe_image_filename("abc.png"));
+    }
+
+    #[test]
+    fn safe_filename_wrong_extension() {
+        assert!(!is_safe_image_filename("42.jpg"));
+    }
+
+    #[test]
+    fn safe_filename_dotdot_prefix() {
+        assert!(!is_safe_image_filename("../42.png"));
+    }
+
+    #[test]
+    fn safe_filename_forward_slash() {
+        assert!(!is_safe_image_filename("dir/42.png"));
+    }
+
+    #[test]
+    fn safe_filename_backslash() {
+        assert!(!is_safe_image_filename("dir\\42.png"));
+    }
+
+    #[test]
+    fn safe_filename_null_byte() {
+        assert!(!is_safe_image_filename("null\042.png"));
+    }
+
+    #[test]
+    fn safe_filename_empty() {
+        assert!(!is_safe_image_filename(""));
+    }
+
+    #[test]
+    fn safe_filename_dot_png_only() {
+        // ".png" has no path separators or null bytes and ends with ".png"
+        assert!(is_safe_image_filename(".png"));
+    }
+
+    // ------------------------------------------------------------------ //
+    // is_image_path
+    // ------------------------------------------------------------------ //
 
     #[test]
     fn is_image_path_accepts_known_extensions() {

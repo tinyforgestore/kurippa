@@ -6,7 +6,42 @@ use tauri::{AppHandle, Emitter, Manager};
 use super::{hash, image, platform};
 use super::skip::{check_and_clear_image_skip, check_and_clear_text_skip, PasteSkip};
 
-const POLL_INTERVAL: Duration = Duration::from_millis(250);
+const POLL_INTERVAL: Duration = Duration::from_millis(500);
+/// Maximum pixel count (width × height) for a clipboard image; images exceeding
+/// this are skipped to avoid memory pressure and slow PNG encodes.
+const MAX_IMAGE_PIXELS: usize = 12_000_000;
+const WAL_CHECKPOINT_INTERVAL: u32 = 200;
+
+/// The kind of content found on the clipboard during a single poll tick.
+#[derive(Debug, PartialEq)]
+pub enum ClipboardKind {
+    Text,
+    Image,
+    Empty,
+}
+
+/// Returns true when an image's pixel count exceeds `cap`.
+pub fn image_exceeds_cap(width: usize, height: usize, cap: usize) -> bool {
+    width * height > cap
+}
+
+/// Returns true when `write_count` is a multiple of `interval` (including zero).
+pub fn should_checkpoint(write_count: u32, interval: u32) -> bool {
+    write_count % interval == 0
+}
+
+/// Classifies clipboard content from the perspective of the poll loop.
+/// Text wins over image when both are present.
+pub fn classify_clipboard_content(text: Option<&str>, has_image: bool) -> ClipboardKind {
+    let text_empty = text.map(|t| t.is_empty()).unwrap_or(true);
+    if !text_empty {
+        ClipboardKind::Text
+    } else if has_image {
+        ClipboardKind::Image
+    } else {
+        ClipboardKind::Empty
+    }
+}
 
 /// Tracks the last successfully stored clipboard item for deduplication.
 enum LastCapture {
@@ -42,6 +77,7 @@ pub fn spawn(app: AppHandle, db: DbState, paste_skip: PasteSkip) {
             }
         };
         let mut consecutive_rename_failures: u32 = 0;
+        let mut write_count: u32 = 0;
 
         loop {
             std::thread::sleep(POLL_INTERVAL);
@@ -166,11 +202,17 @@ pub fn spawn(app: AppHandle, db: DbState, paste_skip: PasteSkip) {
                                     if license::is_activated(&app) {
                                         if let Some(images_dir) = app.path().app_data_dir().ok().map(|d: std::path::PathBuf| d.join("images")) {
                                             let png_path = images_dir.join(&final_filename);
-                                            if let Ok(qr_result) = rxing::helpers::detect_in_file(
-                                                png_path.to_string_lossy().as_ref(),
-                                                None,
-                                            ) {
-                                                let qr_text = qr_result.getText().to_string();
+                                            let png_path_str = png_path.to_string_lossy().into_owned();
+                                            // Run QR decode on a blocking thread so the CGEventTap
+                                            // callback and clipboard poll loop are not stalled.
+                                            let qr_result = tauri::async_runtime::block_on(
+                                                tauri::async_runtime::spawn_blocking(move || {
+                                                    rxing::helpers::detect_in_file(&png_path_str, None)
+                                                        .ok()
+                                                        .map(|r| r.getText().to_string())
+                                                })
+                                            );
+                                            if let Ok(Some(qr_text)) = qr_result {
                                                 let conn = db.lock().unwrap();
                                                 let _ = db::update_qr_text(&conn, row_id, &qr_text);
                                                 item.qr_text = Some(qr_text);
@@ -239,6 +281,11 @@ pub fn spawn(app: AppHandle, db: DbState, paste_skip: PasteSkip) {
 
                 if any_committed {
                     last_capture = LastCapture::FileUrl(url_hash);
+                    write_count += 1;
+                    if should_checkpoint(write_count, WAL_CHECKPOINT_INTERVAL) {
+                        let conn = db.lock().unwrap();
+                        let _ = conn.execute_batch("PRAGMA wal_checkpoint(TRUNCATE)");
+                    }
                 }
                 continue; // skip normal text/image detection this iteration
             }
@@ -255,12 +302,19 @@ pub fn spawn(app: AppHandle, db: DbState, paste_skip: PasteSkip) {
             };
 
             // Nothing useful on the clipboard (None or empty string, no image).
-            if text_is_empty && image_result.is_none() {
+            if classify_clipboard_content(text.as_deref(), image_result.is_some()) == ClipboardKind::Empty {
                 continue;
             }
 
             // --- image path ---
             let (image_filename, kind) = if let Some(ref img_data) = image_result {
+                // Skip oversized images to avoid memory pressure and slow encodes.
+                let (w, h) = (img_data.width, img_data.height);
+                if image_exceeds_cap(w, h, MAX_IMAGE_PIXELS) {
+                    log::debug!("[clipboard] Skipping oversized clipboard image: {}×{}", w, h);
+                    continue;
+                }
+
                 let img_hash = hash::content_hash_bytes(&img_data.bytes);
 
                 // Dedup: skip if identical image was last captured.
@@ -378,8 +432,11 @@ pub fn spawn(app: AppHandle, db: DbState, paste_skip: PasteSkip) {
             // If we saved a temp image, rename it to <id>.png and update the DB row.
             if item.kind == "image" {
                 if let Some(ref pending) = image_filename {
-                    let conn = db.lock().unwrap();
-                    match image::finalize_image(&conn, row_id, pending) {
+                    let finalize_result = {
+                        let conn = db.lock().unwrap();
+                        image::finalize_image(&conn, row_id, pending)
+                    };
+                    match finalize_result {
                         image::FinalizeResult::Ok(final_filename) => {
                             item.image_path = Some(final_filename.clone());
                             item.image_width = Some(pending.width as i64);
@@ -390,11 +447,18 @@ pub fn spawn(app: AppHandle, db: DbState, paste_skip: PasteSkip) {
                             if license::is_activated(&app) {
                                 if let Some(images_dir) = app.path().app_data_dir().ok().map(|d: std::path::PathBuf| d.join("images")) {
                                     let png_path = images_dir.join(&final_filename);
-                                    if let Ok(qr_result) = rxing::helpers::detect_in_file(
-                                        png_path.to_string_lossy().as_ref(),
-                                        None,
-                                    ) {
-                                        let qr_text = qr_result.getText().to_string();
+                                    let png_path_str = png_path.to_string_lossy().into_owned();
+                                    // DB lock is already released; run QR decode on a blocking
+                                    // thread so other threads are not gated on decode time.
+                                    let qr_result = tauri::async_runtime::block_on(
+                                        tauri::async_runtime::spawn_blocking(move || {
+                                            rxing::helpers::detect_in_file(&png_path_str, None)
+                                                .ok()
+                                                .map(|r| r.getText().to_string())
+                                        })
+                                    );
+                                    if let Ok(Some(qr_text)) = qr_result {
+                                        let conn = db.lock().unwrap();
                                         let _ = db::update_qr_text(&conn, row_id, &qr_text);
                                         item.qr_text = Some(qr_text);
                                     }
@@ -409,20 +473,26 @@ pub fn spawn(app: AppHandle, db: DbState, paste_skip: PasteSkip) {
                             if let Some(parent) = pending.tmp_path.parent() {
                                 let _ = std::fs::remove_file(parent.join(format!("{row_id}.png")));
                             }
-                            if let Err(de) = db::delete_item(&conn, row_id) {
-                                eprintln!(
-                                    "[clipboard] failed to delete orphaned row {row_id}: {de}"
-                                );
+                            {
+                                let conn = db.lock().unwrap();
+                                if let Err(de) = db::delete_item(&conn, row_id) {
+                                    eprintln!(
+                                        "[clipboard] failed to delete orphaned row {row_id}: {de}"
+                                    );
+                                }
                             }
                             continue;
                         }
                         image::FinalizeResult::RenameFailed => {
                             // Rename failed — remove the temp file and the orphaned DB row.
                             let _ = std::fs::remove_file(&pending.tmp_path);
-                            if let Err(e) = db::delete_item(&conn, row_id) {
-                                eprintln!(
-                                    "[clipboard] failed to delete orphaned row {row_id}: {e}"
-                                );
+                            {
+                                let conn = db.lock().unwrap();
+                                if let Err(e) = db::delete_item(&conn, row_id) {
+                                    eprintln!(
+                                        "[clipboard] failed to delete orphaned row {row_id}: {e}"
+                                    );
+                                }
                             }
                             consecutive_rename_failures += 1;
                             if consecutive_rename_failures >= 3 {
@@ -467,6 +537,13 @@ pub fn spawn(app: AppHandle, db: DbState, paste_skip: PasteSkip) {
             // Emit event to frontend
             if let Err(e) = app.emit("clipboard-updated", &item) {
                 eprintln!("[clipboard] emit error: {e}");
+            }
+
+            // Periodic WAL checkpoint every 200 writes to prevent unbounded WAL growth.
+            write_count += 1;
+            if should_checkpoint(write_count, WAL_CHECKPOINT_INTERVAL) {
+                let conn = db.lock().unwrap();
+                let _ = conn.execute_batch("PRAGMA wal_checkpoint(TRUNCATE)");
             }
         }
     });

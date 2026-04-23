@@ -9,6 +9,7 @@ mod window;
 use commands::UpdaterState;
 use db::DbState;
 use std::sync::{Arc, Mutex};
+use std::sync::atomic::{AtomicU64, Ordering};
 use tauri::{
     tray::{MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent},
     Emitter, Manager,
@@ -60,17 +61,26 @@ pub fn run() {
 
             // --- Last-click position tracker (rdev) ---
             // Track the last global mouse-click position for monitor selection.
-            let last_click_pos = Arc::new(Mutex::new(None::<(f64, f64)>));
-            app.manage(window::LastClickPos(last_click_pos.clone()));
+            // Use AtomicU64 (via f64::to_bits) so the CGEventTap callback never
+            // blocks on a Mutex — a blocking callback causes macOS to disable the tap.
+            // u64::MAX is the sentinel meaning "no position recorded yet".
+            let last_click_x = Arc::new(AtomicU64::new(u64::MAX));
+            let last_click_y = Arc::new(AtomicU64::new(u64::MAX));
+            app.manage(window::LastClickPos(last_click_x.clone(), last_click_y.clone()));
             std::thread::spawn(move || {
                 log::info!("[rdev] listener thread started");
                 // rdev::Event has no position field; position lives inside
                 // EventType::MouseMove { x, y }.  We keep a running cursor
                 // position and snapshot it whenever a button is pressed.
                 // Restart automatically if the CGEventTap is invalidated.
+                // Exponential backoff: start at 1s, double each failure, cap at 30s.
+                // Reset to 1s after a successful run that lasted more than 5 seconds.
+                let mut backoff = std::time::Duration::from_secs(1);
                 loop {
-                    let click_pos = last_click_pos.clone();
+                    let click_x = last_click_x.clone();
+                    let click_y = last_click_y.clone();
                     let mut cursor: (f64, f64) = (0.0, 0.0);
+                    let start = std::time::Instant::now();
                     let result = rdev::listen(move |event| {
                         match event.event_type {
                             rdev::EventType::MouseMove { x, y } => {
@@ -78,17 +88,20 @@ pub fn run() {
                             }
                             rdev::EventType::ButtonPress(btn) => {
                                 log::debug!("[rdev] ButtonPress({:?}) at cursor=({:.1},{:.1})", btn, cursor.0, cursor.1);
-                                if let Ok(mut guard) = click_pos.lock() {
-                                    *guard = Some(cursor);
-                                } else {
-                                    log::warn!("[rdev] failed to lock last_click_pos");
-                                }
+                                click_x.store(cursor.0.to_bits(), Ordering::Relaxed);
+                                click_y.store(cursor.1.to_bits(), Ordering::Relaxed);
                             }
                             _ => {}
                         }
                     });
-                    log::warn!("[rdev] listener exited: {:?}, restarting in 1s", result);
-                    std::thread::sleep(std::time::Duration::from_secs(1));
+                    let elapsed = start.elapsed();
+                    if elapsed > std::time::Duration::from_secs(5) {
+                        // Tap survived long enough — considered a normal exit; reset backoff.
+                        backoff = std::time::Duration::from_secs(1);
+                    }
+                    log::warn!("[rdev] listener exited: {:?}, restarting in {:?}", result, backoff);
+                    std::thread::sleep(backoff);
+                    backoff = (backoff * 2).min(std::time::Duration::from_secs(30));
                 }
             });
 

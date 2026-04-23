@@ -326,3 +326,197 @@ fn touch_item_nonexistent_id_returns_error() {
     let result = touch_item(&conn, 9999, 1_000);
     assert!(result.is_err(), "touch_item on a missing id must return Err");
 }
+
+// ------------------------------------------------------------------
+// clear_history()
+// ------------------------------------------------------------------
+
+#[test]
+fn clear_history_deletes_unpinned_and_returns_image_paths() {
+    let conn = in_memory_db();
+
+    // Insert a pinned item (should survive)
+    let pinned = make_item("pinned", 1_000, true);
+    insert_item(&conn, &pinned).expect("insert pinned item");
+
+    // Insert an unpinned item with an image_path
+    let mut with_image = make_item("with-image", 2_000, false);
+    with_image.image_path = Some("img.png".to_string());
+    insert_item(&conn, &with_image).expect("insert item with image");
+
+    // Insert an unpinned text-only item (no image_path)
+    let text_only = make_item("text-only", 3_000, false);
+    insert_item(&conn, &text_only).expect("insert text-only item");
+
+    let paths = clear_history(&conn).expect("clear_history should succeed");
+
+    // Only the image-bearing item's path should be returned
+    assert_eq!(paths, vec!["img.png".to_string()]);
+
+    // Pinned item must survive
+    let rows = get_history(&conn, 50).expect("get_history");
+    assert_eq!(rows.len(), 1, "only the pinned item should remain");
+    assert!(rows[0].pinned, "surviving item must be pinned");
+}
+
+#[test]
+fn clear_history_text_only_item_not_in_returned_paths() {
+    let conn = in_memory_db();
+    let text_only = make_item("plain-text", 1_000, false);
+    insert_item(&conn, &text_only).expect("insert text-only item");
+
+    let paths = clear_history(&conn).expect("clear_history should succeed");
+    assert!(paths.is_empty(), "text-only items should not appear in returned paths");
+}
+
+// ------------------------------------------------------------------
+// delete_item_with_path()
+// ------------------------------------------------------------------
+
+#[test]
+fn delete_item_with_path_returns_path_when_present() {
+    let conn = in_memory_db();
+    let mut item = make_item("img-item", 1_000, false);
+    item.image_path = Some("42.png".to_string());
+    let (id, _) = insert_item(&conn, &item).expect("insert item");
+
+    let path = delete_item_with_path(&conn, id).expect("delete_item_with_path should succeed");
+    assert_eq!(path, Some("42.png".to_string()));
+
+    // Item should be deleted
+    let count: i64 = conn
+        .query_row("SELECT COUNT(*) FROM items WHERE id = ?1", [id], |r| r.get(0))
+        .unwrap();
+    assert_eq!(count, 0, "item should be deleted");
+}
+
+#[test]
+fn delete_item_with_path_returns_none_when_no_image_path() {
+    let conn = in_memory_db();
+    let item = make_item("no-image", 1_000, false);
+    let (id, _) = insert_item(&conn, &item).expect("insert item");
+
+    let path = delete_item_with_path(&conn, id).expect("delete_item_with_path should succeed");
+    assert!(path.is_none(), "should return None when image_path is NULL");
+}
+
+#[test]
+fn delete_item_with_path_returns_none_for_nonexistent_id() {
+    let conn = in_memory_db();
+    let path = delete_item_with_path(&conn, 9999).expect("delete_item_with_path should succeed even for missing id");
+    assert!(path.is_none(), "should return None when id doesn't exist");
+}
+
+// ------------------------------------------------------------------
+// pin_item() / unpin_item()
+// ------------------------------------------------------------------
+
+#[test]
+fn pin_item_sets_pinned_and_clears_folder_id() {
+    let conn = in_memory_db();
+    // Insert item with a folder_id set directly via SQL (bypass insert_item validation)
+    let mut item = make_item("in-folder", 1_000, false);
+    item.folder_id = Some(42);
+    let (id, _) = insert_item(&conn, &item).expect("insert item");
+
+    pin_item(&conn, id).expect("pin_item should succeed");
+
+    let rows = get_history(&conn, 10).expect("get_history");
+    let saved = rows.iter().find(|r| r.id == id).expect("item should exist");
+    assert!(saved.pinned, "pinned should be set to true");
+    assert!(saved.folder_id.is_none(), "folder_id should be cleared to NULL when pinned");
+}
+
+#[test]
+fn unpin_item_clears_pinned_flag() {
+    let conn = in_memory_db();
+    let item = make_item("pinned-item", 1_000, true);
+    let (id, _) = insert_item(&conn, &item).expect("insert item");
+
+    unpin_item(&conn, id).expect("unpin_item should succeed");
+
+    let rows = get_history(&conn, 10).expect("get_history");
+    let saved = rows.iter().find(|r| r.id == id).expect("item should exist");
+    assert!(!saved.pinned, "pinned should be cleared to false");
+}
+
+// ------------------------------------------------------------------
+// update_qr_text()
+// ------------------------------------------------------------------
+
+#[test]
+fn update_qr_text_sets_qr_text_on_item() {
+    let conn = in_memory_db();
+    let item = make_item("qr-item", 1_000, false);
+    let (id, _) = insert_item(&conn, &item).expect("insert item");
+
+    update_qr_text(&conn, id, "https://example.com").expect("update_qr_text should succeed");
+
+    let rows = get_history(&conn, 10).expect("get_history");
+    let saved = rows.iter().find(|r| r.id == id).expect("item should exist");
+    assert_eq!(saved.qr_text.as_deref(), Some("https://example.com"));
+}
+
+// ------------------------------------------------------------------
+// get_item_texts()
+// ------------------------------------------------------------------
+
+#[test]
+fn get_item_texts_returns_empty_for_empty_input() {
+    let conn = in_memory_db();
+    let result = get_item_texts(&conn, &[]).expect("get_item_texts should succeed");
+    assert!(result.is_empty(), "empty input should return empty vec");
+}
+
+#[test]
+fn get_item_texts_returns_texts_in_input_order() {
+    let conn = in_memory_db();
+    let (id1, _) = insert_item(&conn, &make_item("first", 1_000, false)).expect("insert first");
+    let (id2, _) = insert_item(&conn, &make_item("second", 2_000, false)).expect("insert second");
+    let (id3, _) = insert_item(&conn, &make_item("third", 3_000, false)).expect("insert third");
+
+    // Request in reverse order
+    let result = get_item_texts(&conn, &[id3, id1, id2]).expect("get_item_texts should succeed");
+    assert_eq!(result, vec!["third", "first", "second"]);
+}
+
+#[test]
+fn get_item_texts_skips_nonexistent_ids() {
+    let conn = in_memory_db();
+    let (id, _) = insert_item(&conn, &make_item("exists", 1_000, false)).expect("insert item");
+
+    let result = get_item_texts(&conn, &[id, 9999]).expect("get_item_texts should succeed");
+    assert_eq!(result, vec!["exists"]);
+}
+
+#[test]
+fn get_item_texts_skips_items_with_null_text() {
+    let conn = in_memory_db();
+    // Insert an item with NULL text directly via SQL
+    conn.execute(
+        "INSERT INTO items (kind, text, created_at, pinned) VALUES ('image', NULL, 1000, 0)",
+        [],
+    )
+    .expect("insert image item");
+    let null_id = conn.last_insert_rowid();
+
+    let (text_id, _) =
+        insert_item(&conn, &make_item("has-text", 2_000, false)).expect("insert text item");
+
+    let result = get_item_texts(&conn, &[null_id, text_id]).expect("get_item_texts should succeed");
+    assert_eq!(result, vec!["has-text"], "NULL-text item should be skipped");
+}
+
+#[test]
+fn get_item_texts_skips_items_with_empty_text() {
+    let conn = in_memory_db();
+    conn.execute(
+        "INSERT INTO items (kind, text, created_at, pinned) VALUES ('text', '', 1000, 0)",
+        [],
+    )
+    .expect("insert empty-text item");
+    let empty_id = conn.last_insert_rowid();
+
+    let result = get_item_texts(&conn, &[empty_id]).expect("get_item_texts should succeed");
+    assert!(result.is_empty(), "empty-text item should be skipped");
+}

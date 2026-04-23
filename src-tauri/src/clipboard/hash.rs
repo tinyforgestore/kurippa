@@ -20,6 +20,7 @@ pub fn content_hash_bytes(bytes: &[u8]) -> u64 {
 #[cfg(test)]
 mod tests {
     use super::{content_hash, content_hash_bytes};
+    use crate::clipboard::platform;
 
     #[test]
     fn content_hash_same_text_produces_same_hash() {
@@ -57,5 +58,25 @@ mod tests {
     #[test]
     fn content_hash_bytes_different_input_produces_different_hash() {
         assert_ne!(content_hash_bytes(b"aaa"), content_hash_bytes(b"bbb"));
+    }
+
+    // ------------------------------------------------------------------
+    // unix_now()
+    // ------------------------------------------------------------------
+
+    #[test]
+    fn unix_now_is_recent() {
+        // unix_now() returns milliseconds since epoch.
+        // 1_700_000_000_000 ms = approx. Nov 2023 (safe lower bound).
+        // 2_000_000_000_000 ms = approx. May 2033 (safe upper bound).
+        let ts = platform::unix_now();
+        assert!(
+            ts > 1_700_000_000_000,
+            "unix_now() must be greater than Nov 2023 epoch-ms, got {ts}"
+        );
+        assert!(
+            ts < 2_000_000_000_000,
+            "unix_now() must be less than May 2033 epoch-ms, got {ts}"
+        );
     }
 }

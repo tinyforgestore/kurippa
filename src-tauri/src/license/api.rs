@@ -2,11 +2,17 @@ use crate::license::{store::*, types::*};
 
 pub(crate) const PRODUCT_ID_LIVE: &str = "979047";
 pub(crate) const PRODUCT_ID_TEST: &str = "991094";
-pub(crate) const ACTIVATE_URL: &str = "https://api.lemonsqueezy.com/v1/licenses/activate";
-pub(crate) const VALIDATE_URL: &str = "https://api.lemonsqueezy.com/v1/licenses/validate";
-pub(crate) const DEACTIVATE_URL: &str = "https://api.lemonsqueezy.com/v1/licenses/deactivate";
+const LS_BASE_URL: &str = "https://api.lemonsqueezy.com";
 
 pub async fn activate_license(app: &tauri::AppHandle, key: &str) -> Result<ActivationDetails, LicenseError> {
+    activate_license_inner(app, key, LS_BASE_URL).await
+}
+
+async fn activate_license_inner(
+    app: &tauri::AppHandle,
+    key: &str,
+    base_url: &str,
+) -> Result<ActivationDetails, LicenseError> {
     let hostname = gethostname::gethostname().to_string_lossy().to_string();
 
     let client = reqwest::Client::new();
@@ -15,8 +21,9 @@ pub async fn activate_license(app: &tauri::AppHandle, key: &str) -> Result<Activ
         "instance_name": hostname,
     });
 
+    let url = format!("{base_url}/v1/licenses/activate");
     let response = client
-        .post(ACTIVATE_URL)
+        .post(&url)
         .header("Content-Type", "application/json")
         .json(&body)
         .send()
@@ -60,12 +67,25 @@ pub async fn activate_license(app: &tauri::AppHandle, key: &str) -> Result<Activ
 
 pub async fn deactivate_license(app: &tauri::AppHandle) -> Result<(), LicenseError> {
     let info = load_license_file(app).ok_or(LicenseError::InvalidKey)?;
+    deactivate_license_inner(&info.license_key, &info.instance_id, LS_BASE_URL, || {
+        delete_license_file(app);
+    })
+    .await
+}
+
+async fn deactivate_license_inner(
+    license_key: &str,
+    instance_id: &str,
+    base_url: &str,
+    on_success: impl FnOnce(),
+) -> Result<(), LicenseError> {
     let client = reqwest::Client::new();
+    let url = format!("{base_url}/v1/licenses/deactivate");
     let resp = client
-        .post(DEACTIVATE_URL)
+        .post(&url)
         .json(&serde_json::json!({
-            "license_key": info.license_key,
-            "instance_id": info.instance_id,
+            "license_key": license_key,
+            "instance_id": instance_id,
         }))
         .send()
         .await
@@ -78,7 +98,7 @@ pub async fn deactivate_license(app: &tauri::AppHandle) -> Result<(), LicenseErr
 
     let deactivated = json.get("deactivated").and_then(|v| v.as_bool()).unwrap_or(false);
     if deactivated {
-        delete_license_file(app);
+        on_success();
         Ok(())
     } else {
         let msg = json
@@ -95,15 +115,27 @@ pub async fn revalidate(app: &tauri::AppHandle) -> Result<(), LicenseError> {
         Some(i) => i,
         None => return Err(LicenseError::InvalidKey),
     };
+    revalidate_inner(&info.license_key, &info.instance_id, LS_BASE_URL, || {
+        delete_license_file(app);
+    })
+    .await
+}
 
+async fn revalidate_inner(
+    license_key: &str,
+    instance_id: &str,
+    base_url: &str,
+    on_invalid: impl FnOnce(),
+) -> Result<(), LicenseError> {
     let client = reqwest::Client::new();
     let body = serde_json::json!({
-        "license_key": info.license_key,
-        "instance_id": info.instance_id,
+        "license_key": license_key,
+        "instance_id": instance_id,
     });
 
+    let url = format!("{base_url}/v1/licenses/validate");
     let response = client
-        .post(VALIDATE_URL)
+        .post(&url)
         .header("Content-Type", "application/json")
         .json(&body)
         .send()
@@ -120,7 +152,7 @@ pub async fn revalidate(app: &tauri::AppHandle) -> Result<(), LicenseError> {
     let valid = json.get("valid").and_then(|v| v.as_bool()).unwrap_or(false);
 
     if !valid {
-        delete_license_file(app);
+        on_invalid();
         return Err(LicenseError::InvalidKey);
     }
 
@@ -132,7 +164,7 @@ pub async fn revalidate(app: &tauri::AppHandle) -> Result<(), LicenseError> {
         .to_string();
 
     if product_id != PRODUCT_ID_LIVE && product_id != PRODUCT_ID_TEST {
-        delete_license_file(app);
+        on_invalid();
         return Err(LicenseError::InvalidKey);
     }
 
@@ -259,6 +291,8 @@ fn days_to_ymd(days: u64) -> (u64, u64, u64) {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use wiremock::matchers::{method, path};
+    use wiremock::{Mock, MockServer, ResponseTemplate};
 
     // --- classify_activation_error ---
 
@@ -430,5 +464,274 @@ mod tests {
             && digit(bytes[17])
             && digit(bytes[18])
             && bytes[19] == b'Z'
+    }
+
+    // -----------------------------------------------------------------------
+    // HTTP mock tests — activate_license_inner
+    // -----------------------------------------------------------------------
+
+    fn valid_activation_body(product_id: u64) -> serde_json::Value {
+        serde_json::json!({
+            "activated": true,
+            "meta": {
+                "product_id": product_id,
+                "variant_name": "Default",
+                "customer_email": "user@example.com"
+            },
+            "instance": {
+                "id": "test-instance-id-123"
+            },
+            "license_key": {
+                "activation_usage": 1_u64,
+                "activation_limit": 3_u64
+            }
+        })
+    }
+
+    #[tokio::test]
+    async fn activate_license_success() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("POST"))
+            .and(path("/v1/licenses/activate"))
+            .respond_with(
+                ResponseTemplate::new(200)
+                    .set_body_json(valid_activation_body(PRODUCT_ID_TEST.parse::<u64>().expect("parse PRODUCT_ID_TEST"))),
+            )
+            .mount(&mock_server)
+            .await;
+
+        // activate_license_inner requires an AppHandle for save_license_file.
+        // We test the HTTP + parsing logic via a thin wrapper that skips file I/O.
+        let result = activate_license_http_only("XXXX-YYYY", &mock_server.uri()).await;
+        assert!(result.is_ok(), "expected Ok, got {result:?}");
+        let details = result.expect("activation details");
+        assert_eq!(details.plan_name, "Kurippa — Lifetime");
+        assert_eq!(details.device_count, 1);
+        assert_eq!(details.device_limit, 3);
+    }
+
+    #[tokio::test]
+    async fn activate_license_invalid_key() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("POST"))
+            .and(path("/v1/licenses/activate"))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                    "activated": false,
+                    "error": "This license key is invalid"
+                })),
+            )
+            .mount(&mock_server)
+            .await;
+
+        let result = activate_license_http_only("BAD-KEY", &mock_server.uri()).await;
+        assert!(matches!(result, Err(LicenseError::InvalidKey)), "expected InvalidKey, got {result:?}");
+    }
+
+    #[tokio::test]
+    async fn activate_license_network_error() {
+        // Nothing listening on port 1 — connection refused → NetworkError
+        let result = activate_license_http_only("ANY-KEY", "http://127.0.0.1:1").await;
+        assert!(
+            matches!(result, Err(LicenseError::NetworkError(_))),
+            "expected NetworkError, got {result:?}"
+        );
+    }
+
+    /// Thin test helper: performs the HTTP call and JSON parsing of activate
+    /// without touching the file system (no AppHandle needed).
+    async fn activate_license_http_only(
+        key: &str,
+        base_url: &str,
+    ) -> Result<ActivationDetails, LicenseError> {
+        let client = reqwest::Client::new();
+        let body = serde_json::json!({
+            "license_key": key,
+            "instance_name": "test-host",
+        });
+
+        let url = format!("{base_url}/v1/licenses/activate");
+        let response = client
+            .post(&url)
+            .header("Content-Type", "application/json")
+            .json(&body)
+            .send()
+            .await
+            .map_err(|e| LicenseError::NetworkError(e.to_string()))?;
+
+        let json: serde_json::Value = response
+            .json()
+            .await
+            .map_err(|e| LicenseError::NetworkError(e.to_string()))?;
+
+        let activated = json.get("activated").and_then(|v| v.as_bool()).unwrap_or(false);
+        if !activated {
+            let error_msg = json
+                .get("error")
+                .and_then(|v| v.as_str())
+                .unwrap_or("")
+                .to_string();
+            return Err(classify_activation_error(&error_msg));
+        }
+
+        let (_instance_id, details) = parse_activation_response(&json)?;
+        Ok(details)
+    }
+
+    // -----------------------------------------------------------------------
+    // HTTP mock tests — deactivate_license_inner
+    // -----------------------------------------------------------------------
+
+    #[tokio::test]
+    async fn deactivate_license_success() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("POST"))
+            .and(path("/v1/licenses/deactivate"))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                    "deactivated": true
+                })),
+            )
+            .mount(&mock_server)
+            .await;
+
+        let mut on_success_called = false;
+        let result = deactivate_license_inner(
+            "XXXX-YYYY",
+            "inst-abc",
+            &mock_server.uri(),
+            || { on_success_called = true; },
+        )
+        .await;
+
+        assert!(result.is_ok(), "expected Ok, got {result:?}");
+        assert!(on_success_called, "on_success callback should have been called");
+    }
+
+    #[tokio::test]
+    async fn deactivate_license_failure() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("POST"))
+            .and(path("/v1/licenses/deactivate"))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                    "deactivated": false,
+                    "error": "Instance not found"
+                })),
+            )
+            .mount(&mock_server)
+            .await;
+
+        let result = deactivate_license_inner(
+            "XXXX-YYYY",
+            "inst-abc",
+            &mock_server.uri(),
+            || {},
+        )
+        .await;
+
+        assert!(
+            matches!(result, Err(LicenseError::Unknown(_))),
+            "expected Unknown error, got {result:?}"
+        );
+    }
+
+    // -----------------------------------------------------------------------
+    // HTTP mock tests — revalidate_inner
+    // -----------------------------------------------------------------------
+
+    #[tokio::test]
+    async fn revalidate_success() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("POST"))
+            .and(path("/v1/licenses/validate"))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                    "valid": true,
+                    "meta": {
+                        "product_id": PRODUCT_ID_TEST.parse::<u64>().expect("parse PRODUCT_ID_TEST")
+                    }
+                })),
+            )
+            .mount(&mock_server)
+            .await;
+
+        let result = revalidate_inner("XXXX-YYYY", "inst-abc", &mock_server.uri(), || {}).await;
+        assert!(result.is_ok(), "expected Ok, got {result:?}");
+    }
+
+    #[tokio::test]
+    async fn revalidate_invalid_valid_false() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("POST"))
+            .and(path("/v1/licenses/validate"))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                    "valid": false,
+                    "error": "License key not found"
+                })),
+            )
+            .mount(&mock_server)
+            .await;
+
+        let mut on_invalid_called = false;
+        let result =
+            revalidate_inner("BAD-KEY", "inst-abc", &mock_server.uri(), || {
+                on_invalid_called = true;
+            })
+            .await;
+
+        assert!(
+            matches!(result, Err(LicenseError::InvalidKey)),
+            "expected InvalidKey, got {result:?}"
+        );
+        assert!(on_invalid_called, "on_invalid callback should have been called");
+    }
+
+    #[tokio::test]
+    async fn revalidate_invalid_wrong_product_id() {
+        let mock_server = MockServer::start().await;
+
+        Mock::given(method("POST"))
+            .and(path("/v1/licenses/validate"))
+            .respond_with(
+                ResponseTemplate::new(200).set_body_json(serde_json::json!({
+                    "valid": true,
+                    "meta": {
+                        "product_id": 999999_u64
+                    }
+                })),
+            )
+            .mount(&mock_server)
+            .await;
+
+        let mut on_invalid_called = false;
+        let result =
+            revalidate_inner("XXXX-YYYY", "inst-abc", &mock_server.uri(), || {
+                on_invalid_called = true;
+            })
+            .await;
+
+        assert!(
+            matches!(result, Err(LicenseError::InvalidKey)),
+            "expected InvalidKey for wrong product_id, got {result:?}"
+        );
+        assert!(on_invalid_called, "on_invalid callback should have been called for wrong product_id");
+    }
+
+    #[tokio::test]
+    async fn revalidate_network_error() {
+        let result =
+            revalidate_inner("XXXX-YYYY", "inst-abc", "http://127.0.0.1:1", || {}).await;
+        assert!(
+            matches!(result, Err(LicenseError::NetworkError(_))),
+            "expected NetworkError, got {result:?}"
+        );
     }
 }
