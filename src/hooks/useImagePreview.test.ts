@@ -28,6 +28,13 @@ function makeItem(id: number, image_path: string | null): ClipboardItem {
   };
 }
 
+function deferred<T>() {
+  let resolve!: (v: T) => void;
+  let reject!: (e: unknown) => void;
+  const promise = new Promise<T>((res, rej) => { resolve = res; reject = rej; });
+  return { promise, resolve, reject };
+}
+
 describe("useImagePreview", () => {
   beforeEach(() => {
     vi.clearAllMocks();
@@ -86,5 +93,27 @@ describe("useImagePreview", () => {
     expect(result.current.assetUrl).toBeNull();
     expect(result.current.failed).toBe(false);
     await waitFor(() => expect(result.current.assetUrl).toBe("asset:///path2.png"));
+  });
+
+  it("resolve after unmount skips setAssetUrl (cancelled branch — line 19)", async () => {
+    const d = deferred<string>();
+    mockInvoke.mockReturnValue(d.promise);
+    const item = makeItem(1, "file.png");
+    const { result, unmount } = renderHook(() => useImagePreview(item));
+    unmount(); // sets cancelled = true
+    d.resolve("/some/path");
+    await new Promise((r) => setTimeout(r, 0));
+    expect(result.current.assetUrl).toBeNull();
+  });
+
+  it("reject after unmount skips setFailed (cancelled branch — line 23)", async () => {
+    const d = deferred<string>();
+    mockInvoke.mockReturnValue(d.promise);
+    const item = makeItem(1, "file.png");
+    const { result, unmount } = renderHook(() => useImagePreview(item));
+    unmount(); // sets cancelled = true
+    d.reject(new Error("oops"));
+    await new Promise((r) => setTimeout(r, 0));
+    expect(result.current.failed).toBe(false);
   });
 });

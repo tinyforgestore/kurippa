@@ -201,4 +201,65 @@ describe("useAppKeyboard", () => {
     fireKey("Escape");
     expect(multiSelect.exitMode).toHaveBeenCalledOnce();
   });
+
+  it("Cmd+N calls onTrialError when not activated", () => {
+    const onTrialError = vi.fn();
+    const setScreen = vi.fn();
+    renderHook(() => useAppKeyboard(makeConfig({ isActivated: false, onTrialError, setScreen })));
+    fireKey("n", { metaKey: true });
+    expect(onTrialError).toHaveBeenCalledWith("Folder organisation");
+    expect(setScreen).not.toHaveBeenCalled();
+  });
+
+  it("Cmd+Shift+F calls onTrialError when not activated", () => {
+    const onTrialError = vi.fn();
+    const setScreen = vi.fn();
+    renderHook(() => useAppKeyboard(makeConfig({
+      isActivated: false,
+      onTrialError,
+      setScreen,
+      visibleEntries: [makeItemEntry(1)],
+      selectedIndexRef: { current: 0 },
+    })));
+    fireKey("f", { metaKey: true, shiftKey: true });
+    expect(onTrialError).toHaveBeenCalledWith("Folder organisation");
+    expect(setScreen).not.toHaveBeenCalled();
+  });
+
+  it("Cmd+M calls onTrialError when not activated and not in multiselect", () => {
+    const onTrialError = vi.fn();
+    renderHook(() => useAppKeyboard(makeConfig({
+      isActivated: false,
+      onTrialError,
+      visibleEntries: [makeItemEntry(1)],
+      selectedIndexRef: { current: 0 },
+    })));
+    fireKey("m", { metaKey: true });
+    expect(onTrialError).toHaveBeenCalledWith("Multi-paste");
+  });
+
+  it("Space in multiselect does nothing when no entry at index", () => {
+    const multiSelect = makeMultiSelect({ active: true });
+    renderHook(() => useAppKeyboard(makeConfig({
+      multiSelect,
+      visibleEntries: [],
+      selectedIndexRef: { current: 0 },
+    })));
+    fireKey(" ");
+    expect(multiSelect.toggleSelection).not.toHaveBeenCalled();
+  });
+
+  it("Enter in multiselect with 1 selection does nothing when item not in visible list", () => {
+    const dismiss = vi.fn();
+    const multiSelect = makeMultiSelect({ active: true, selections: [99] });
+    renderHook(() => useAppKeyboard(makeConfig({
+      multiSelect,
+      dismiss,
+      visibleEntries: [makeItemEntry(1)],
+      selectedIndexRef: { current: 0 },
+    })));
+    fireKey("Enter");
+    expect(mockInvoke).not.toHaveBeenCalled();
+    expect(dismiss).not.toHaveBeenCalled();
+  });
 });

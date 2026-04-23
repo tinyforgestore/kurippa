@@ -5,6 +5,8 @@ import { useLicense } from "@/hooks/useLicense";
 const mockInvoke = vi.fn();
 const mockStoreGet = vi.fn();
 const mockLoad = vi.fn();
+const mockUnlisten = vi.fn();
+const mockListen = vi.fn().mockResolvedValue(mockUnlisten);
 
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: (...args: unknown[]) => mockInvoke(...args),
@@ -12,6 +14,10 @@ vi.mock("@tauri-apps/api/core", () => ({
 
 vi.mock("@tauri-apps/plugin-store", () => ({
   load: (...args: unknown[]) => mockLoad(...args),
+}));
+
+vi.mock("@tauri-apps/api/event", () => ({
+  listen: (...args: unknown[]) => mockListen(...args),
 }));
 
 function setupStore(trialValue: boolean | null) {
@@ -274,14 +280,7 @@ describe("useLicense", () => {
   });
 
   describe("Tauri license-state-changed event listener", () => {
-    it("unmount cleans up the listener without crashing", async () => {
-      const mockUnlisten = vi.fn();
-      const mockListen = vi.fn().mockResolvedValue(mockUnlisten);
-
-      vi.doMock("@tauri-apps/api/event", () => ({
-        listen: (...args: unknown[]) => mockListen(...args),
-      }));
-
+    beforeEach(() => {
       mockInvoke.mockImplementation((cmd: string) => {
         if (cmd === "is_activated_cmd") return Promise.resolve(false);
         return Promise.resolve(null);
@@ -289,13 +288,34 @@ describe("useLicense", () => {
       mockLoad.mockResolvedValue({
         get: vi.fn().mockResolvedValue(null),
       });
+    });
+
+    it("stays mounted — listen is called and unlisten is stored (line 70 covered)", async () => {
+      const { unmount } = renderHook(() => useLicense());
+      await act(async () => {});
+
+      expect(mockListen).toHaveBeenCalledWith("license-state-changed", expect.any(Function));
+      // Clean up
+      unmount();
+    });
+
+    it("unmount before resolve — fn() is called to cancel the in-flight listener", async () => {
+      let resolvePromise!: (fn: () => void) => void;
+      mockListen.mockReturnValue(
+        new Promise<() => void>((resolve) => { resolvePromise = resolve; })
+      );
 
       const { unmount } = renderHook(() => useLicense());
       await act(async () => {});
 
-      // Unmounting should call unlisten
+      // Unmount before the listen promise resolves — sets mounted = false
       unmount();
-      // No assertion needed — just ensuring no crash
+
+      // Now resolve the promise — the hook should call fn() immediately
+      const cancelFn = vi.fn();
+      await act(async () => { resolvePromise(cancelFn); });
+
+      expect(cancelFn).toHaveBeenCalledOnce();
     });
   });
 });

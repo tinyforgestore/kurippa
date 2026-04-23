@@ -103,6 +103,22 @@ describe("getPasteOptions", () => {
       const options = getPasteOptions(item);
       expect(options).toHaveLength(0);
     });
+
+    it("appends a QR text option when qr_text is set (short text shown in full)", () => {
+      const item = makeClipboardItem({ id: 42, kind: "image", text: null, image_path: "42.png", qr_text: "https://example.com" });
+      const options = getPasteOptions(item);
+      expect(options).toHaveLength(2);
+      expect(options[1].label).toBe("Paste as QR text  https://example.com");
+      expect(options[1].action).toEqual({ kind: "paste-text", text: "https://example.com", itemId: 42 });
+    });
+
+    it("truncates QR text preview to 30 chars + ellipsis when qr_text is longer than 30", () => {
+      const longText = "a".repeat(31);
+      const item = makeClipboardItem({ id: 42, kind: "image", text: null, image_path: "42.png", qr_text: longText });
+      const options = getPasteOptions(item);
+      expect(options[1].label).toBe(`Paste as QR text  ${"a".repeat(30)}…`);
+      expect(options[1].action).toEqual({ kind: "paste-text", text: longText, itemId: 42 });
+    });
   });
 
   describe("url items", () => {

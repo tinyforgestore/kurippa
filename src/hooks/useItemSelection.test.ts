@@ -75,12 +75,20 @@ function makePinnedHeader(count: number): ListEntry {
   return { kind: "pinned-header", count };
 }
 
+function makeFolderHeader(folderId: number, name = `folder-${folderId}`): ListEntry {
+  return { kind: "folder-header", folderId, name, count: 0, expanded: false };
+}
+
 function makeOptions(overrides: Partial<{
   onPinToggle: (id: number) => void;
   onDelete: (id: number) => void;
   inPinnedSection: boolean;
   onEnterSection: () => void;
   onExitSection: () => void;
+  onEnterFolderSection: (id: number) => void;
+  onExitFolderSection: () => void;
+  onDeleteFolder: (id: number, name: string) => void;
+  expandedFolderId: number | null;
   onOpenPreview: () => void;
   onClosePreview: () => void;
   onOpenPasteAs: (item: import("@/types").ClipboardItem) => void;
@@ -248,6 +256,20 @@ describe("useItemSelection", () => {
 
       act(() => {
         fireKeydown("Backspace", { metaKey: true });
+        vi.runAllTimers();
+      });
+      expect(onDelete).toHaveBeenCalledWith(10);
+    });
+
+    it("⌘Delete on an item entry triggers onDelete end-to-end", () => {
+      const onDelete = vi.fn();
+      const entries: ListEntry[] = [makeItemEntry(10), makeItemEntry(20)];
+      renderHook(() =>
+        useItemSelection(entries, vi.fn(), "", makeOptions({ onDelete }))
+      );
+
+      act(() => {
+        fireKeydown("Delete", { metaKey: true });
         vi.runAllTimers();
       });
       expect(onDelete).toHaveBeenCalledWith(10);
@@ -542,6 +564,74 @@ describe("useItemSelection", () => {
       });
       expect(onExitSection).toHaveBeenCalledOnce();
       expect(onClosePreview).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("folder-header interactions", () => {
+    it("Enter on a folder-header calls onEnterFolderSection with its id", () => {
+      const onEnterFolderSection = vi.fn();
+      const entries: ListEntry[] = [makeFolderHeader(7)];
+      renderHook(() =>
+        useItemSelection(entries, vi.fn(), "", makeOptions({ onEnterFolderSection }))
+      );
+
+      act(() => { fireKeydown("Enter"); });
+      expect(onEnterFolderSection).toHaveBeenCalledWith(7);
+    });
+
+    it("Enter on a folder-header resets selectedIndex to 0", () => {
+      const entries: ListEntry[] = [makeItemEntry(1), makeFolderHeader(7)];
+      const { result } = renderHook(() =>
+        useItemSelection(entries, vi.fn(), "", makeOptions())
+      );
+
+      act(() => { result.current.setSelectedIndex(1); });
+      act(() => { fireKeydown("Enter"); });
+      expect(result.current.selectedIndex).toBe(0);
+    });
+
+    it("ArrowRight on a folder-header calls onEnterFolderSection with its id", () => {
+      const onEnterFolderSection = vi.fn();
+      const entries: ListEntry[] = [makeFolderHeader(3)];
+      renderHook(() =>
+        useItemSelection(entries, vi.fn(), "", makeOptions({ onEnterFolderSection }))
+      );
+
+      act(() => { fireKeydown("ArrowRight"); });
+      expect(onEnterFolderSection).toHaveBeenCalledWith(3);
+    });
+
+    it("⌘Backspace on a folder-header calls onDeleteFolder with its id and name", () => {
+      const onDeleteFolder = vi.fn();
+      const entries: ListEntry[] = [makeFolderHeader(5, "Work")];
+      renderHook(() =>
+        useItemSelection(entries, vi.fn(), "", makeOptions({ onDeleteFolder }))
+      );
+
+      act(() => { fireKeydown("Backspace", { metaKey: true }); });
+      expect(onDeleteFolder).toHaveBeenCalledWith(5, "Work");
+    });
+
+    it("⌘Delete on a folder-header calls onDeleteFolder with its id and name", () => {
+      const onDeleteFolder = vi.fn();
+      const entries: ListEntry[] = [makeFolderHeader(5, "Work")];
+      renderHook(() =>
+        useItemSelection(entries, vi.fn(), "", makeOptions({ onDeleteFolder }))
+      );
+
+      act(() => { fireKeydown("Delete", { metaKey: true }); });
+      expect(onDeleteFolder).toHaveBeenCalledWith(5, "Work");
+    });
+
+    it("⌘N quick-activate on a folder-header calls onEnterFolderSection", () => {
+      const onEnterFolderSection = vi.fn();
+      const entries: ListEntry[] = [makeFolderHeader(9)];
+      renderHook(() =>
+        useItemSelection(entries, vi.fn(), "", makeOptions({ onEnterFolderSection }))
+      );
+
+      act(() => { fireKeydown("0", { metaKey: true }); });
+      expect(onEnterFolderSection).toHaveBeenCalledWith(9);
     });
   });
 

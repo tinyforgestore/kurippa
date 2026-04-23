@@ -6,7 +6,7 @@ import "./settings.css";
 
 document.addEventListener("contextmenu", (e) => e.preventDefault());
 
-function ActivationApp() {
+export function ActivationApp() {
   useTheme();
   return <LicenseActivation />;
 }

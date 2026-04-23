@@ -63,8 +63,7 @@ vi.mock("@/hooks/useTheme", () => ({
 // ---------------------------------------------------------------------------
 
 import ReactDOM from "react-dom/client";
-import "./activationMain";
-import { LicenseActivation } from "@/components/LicenseActivation";
+import { ActivationApp } from "./activationMain";
 import { useTheme } from "@/hooks/useTheme";
 
 // ---------------------------------------------------------------------------
@@ -88,11 +87,6 @@ describe("activationMain — ActivationApp", () => {
   beforeEach(() => {
     vi.clearAllMocks();
   });
-
-  function ActivationApp() {
-    useTheme();
-    return <LicenseActivation />;
-  }
 
   it("renders without crashing", () => {
     render(<ActivationApp />);
