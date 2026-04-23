@@ -69,9 +69,9 @@ pub fn run() {
             app.manage(window::LastClickPos(last_click_x.clone(), last_click_y.clone()));
             std::thread::spawn(move || {
                 log::info!("[rdev] listener thread started");
-                // rdev::Event has no position field; position lives inside
-                // EventType::MouseMove { x, y }.  We keep a running cursor
-                // position and snapshot it whenever a button is pressed.
+                // Track the current cursor position on every MouseMove so that
+                // position_window can place the popup exactly where the cursor is
+                // when the hotkey fires — independent of whether the user has clicked.
                 // Restart automatically if the CGEventTap is invalidated.
                 // Exponential backoff: start at 1s, double each failure, cap at 30s.
                 // Reset to 1s after a successful run that lasted more than 5 seconds.
@@ -79,19 +79,11 @@ pub fn run() {
                 loop {
                     let click_x = last_click_x.clone();
                     let click_y = last_click_y.clone();
-                    let mut cursor: (f64, f64) = (0.0, 0.0);
                     let start = std::time::Instant::now();
                     let result = rdev::listen(move |event| {
-                        match event.event_type {
-                            rdev::EventType::MouseMove { x, y } => {
-                                cursor = (x, y);
-                            }
-                            rdev::EventType::ButtonPress(btn) => {
-                                log::debug!("[rdev] ButtonPress({:?}) at cursor=({:.1},{:.1})", btn, cursor.0, cursor.1);
-                                click_x.store(cursor.0.to_bits(), Ordering::Relaxed);
-                                click_y.store(cursor.1.to_bits(), Ordering::Relaxed);
-                            }
-                            _ => {}
+                        if let rdev::EventType::MouseMove { x, y } = event.event_type {
+                            click_x.store(x.to_bits(), Ordering::Relaxed);
+                            click_y.store(y.to_bits(), Ordering::Relaxed);
                         }
                     });
                     let elapsed = start.elapsed();

@@ -69,7 +69,6 @@
   "bundle": {
     "active": true,
     "targets": "all",
-    "createUpdaterArtifacts": true,
     "macOS": {
       "infoPlist": "Info.plist"
     },

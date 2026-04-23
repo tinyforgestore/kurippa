@@ -115,6 +115,22 @@ jobs:
         with:
           includeUpdaterJson: false
 
+      - name: Create and sign Windows updater artifact
+        shell: pwsh
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          $version = "${{ inputs.tag }}" -replace '^v', ''
+          $nsisDir = "src-tauri\target\release\bundle\nsis"
+          $exe = "$nsisDir\Kurippa_${version}_x64-setup.exe"
+          $zip = "$nsisDir\Kurippa_${version}_x64-setup.nsis.zip"
+          Compress-Archive -Path $exe -DestinationPath $zip -Force
+          pnpm tauri signer sign `
+            -k "$env:TAURI_SIGNING_PRIVATE_KEY" `
+            --password "$env:TAURI_SIGNING_PRIVATE_KEY_PASSWORD" `
+            $zip
+
       - name: Stage Windows artifacts
         shell: pwsh
         run: |
