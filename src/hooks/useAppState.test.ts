@@ -62,6 +62,12 @@ function setupMocks() {
   mockInvoke.mockImplementation((cmd: string) => {
     if (cmd === "get_history") return Promise.resolve([]);
     if (cmd === "get_folders") return Promise.resolve([]);
+    if (cmd === "get_settings") return Promise.resolve({
+      history_limit: "h100",
+      auto_clear_after: "off",
+      multi_paste_separator: "newline",
+      launch_at_login: false,
+    });
     return Promise.resolve(undefined);
   });
 

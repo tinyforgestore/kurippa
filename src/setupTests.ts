@@ -18,3 +18,15 @@ window.HTMLElement.prototype.scrollIntoView = vi.fn();
 
 // jsdom does not implement scrollTo on HTMLElement
 window.HTMLElement.prototype.scrollTo = vi.fn();
+
+// jsdom does not implement matchMedia
+Object.defineProperty(window, "matchMedia", {
+  writable: true,
+  configurable: true,
+  value: vi.fn().mockImplementation((query: string) => ({
+    matches: false,
+    media: query,
+    addEventListener: vi.fn(),
+    removeEventListener: vi.fn(),
+  })),
+});

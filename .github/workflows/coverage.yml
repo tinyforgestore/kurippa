@@ -10,7 +10,7 @@ concurrency:
   group: coverage-${{ github.ref }}
   cancel-in-progress: true
 
-run-name: "Coverage — ${{ github.ref_name }}@${{ github.sha }}"
+run-name: "Coverage: ${{ github.event.head_commit.message }}"
 
 permissions:
   contents: write
