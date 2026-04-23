@@ -11,28 +11,8 @@ permissions:
   contents: write
 
 jobs:
-  create-release:
-    name: Create GitHub Release
-    runs-on: ubuntu-latest
-    outputs:
-      release_id: ${{ steps.create.outputs.release_id }}
-
-    steps:
-      - name: Create release
-        id: create
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          gh release create "${{ inputs.tag }}" \
-            --repo "${{ github.repository }}" \
-            --title "Kurippa ${{ inputs.tag }}" \
-            --generate-notes
-          ID=$(gh api "repos/${{ github.repository }}/releases/tags/${{ inputs.tag }}" --jq .id)
-          echo "release_id=$ID" >> $GITHUB_OUTPUT
-
   build-macos:
     name: Build macOS (.dmg)
-    needs: create-release
     runs-on: macos-latest
 
     steps:
@@ -64,7 +44,7 @@ jobs:
         with:
           workspaces: src-tauri
 
-      - name: Build and upload Tauri app (macOS)
+      - name: Build Tauri app (macOS)
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -72,19 +52,8 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
           APPLE_SIGNING_IDENTITY: "-"
         with:
-          releaseId: ${{ needs.create-release.outputs.release_id }}
           args: --target universal-apple-darwin
-          updaterJsonKeepUniversal: true
           includeUpdaterJson: false
-
-      - name: Rename macOS artifact to stable name
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          ASSET_ID=$(gh api "repos/${{ github.repository }}/releases/${{ needs.create-release.outputs.release_id }}/assets" \
-            --jq '.[] | select(.name | endswith(".dmg")) | .id')
-          gh api -X PATCH "repos/${{ github.repository }}/releases/assets/$ASSET_ID" \
-            -f name="Kurippa_universal.dmg"
 
       - name: Sign macOS updater artifact
         env:
@@ -97,15 +66,17 @@ jobs:
             --password "$TAURI_SIGNING_PRIVATE_KEY_PASSWORD" \
             "$TAR"
 
-      - name: Upload macOS signature
+      - name: Upload macOS build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: macos-sig
-          path: src-tauri/target/universal-apple-darwin/release/bundle/macos/Kurippa.app.tar.gz.sig
+          name: macos-artifacts
+          path: |
+            src-tauri/target/universal-apple-darwin/release/bundle/dmg/*.dmg
+            src-tauri/target/universal-apple-darwin/release/bundle/macos/Kurippa.app.tar.gz
+            src-tauri/target/universal-apple-darwin/release/bundle/macos/Kurippa.app.tar.gz.sig
 
   build-windows:
     name: Build Windows (.exe)
-    needs: create-release
     runs-on: windows-latest
 
     steps:
@@ -135,74 +106,88 @@ jobs:
         with:
           workspaces: src-tauri
 
-      - name: Build and upload Tauri app (Windows)
+      - name: Build Tauri app (Windows)
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         with:
-          releaseId: ${{ needs.create-release.outputs.release_id }}
           includeUpdaterJson: false
 
-      - name: Upload NSIS zip and collect signature
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Stage Windows artifacts
         shell: pwsh
         run: |
+          New-Item -ItemType Directory -Force -Path staging | Out-Null
           $version = "${{ inputs.tag }}" -replace '^v', ''
-          $nsisZip = "src-tauri\target\release\bundle\nsis\Kurippa_${version}_x64-setup.nsis.zip"
-          gh release upload "${{ inputs.tag }}" $nsisZip --repo "${{ github.repository }}" --clobber
-          Copy-Item "${nsisZip}.sig" -Destination "windows.sig"
+          $nsisDir = "src-tauri\target\release\bundle\nsis"
+          Copy-Item "$nsisDir\Kurippa_${version}_x64-setup.exe"          staging\
+          Copy-Item "$nsisDir\Kurippa_${version}_x64-setup.nsis.zip"     staging\
+          Copy-Item "$nsisDir\Kurippa_${version}_x64-setup.nsis.zip.sig" staging\
 
-      - name: Rename Windows artifact to stable name
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        shell: bash
-        run: |
-          ASSET_ID=$(gh api "repos/${{ github.repository }}/releases/${{ needs.create-release.outputs.release_id }}/assets" \
-            --jq '.[] | select(.name | endswith("-setup.exe")) | .id')
-          gh api -X PATCH "repos/${{ github.repository }}/releases/assets/$ASSET_ID" \
-            -f name="Kurippa_x64-setup.exe"
-
-      - name: Upload Windows signature
+      - name: Upload Windows build artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: windows-sig
-          path: windows.sig
+          name: windows-artifacts
+          path: staging/
 
-  generate-updater-json:
-    name: Generate Updater JSON
-    needs: [create-release, build-macos, build-windows]
+  publish:
+    name: Create Release & Publish
+    needs: [build-macos, build-windows]
     runs-on: ubuntu-latest
 
     steps:
-      - name: Download signatures
+      - name: Download macOS artifacts
         uses: actions/download-artifact@v4
         with:
-          pattern: "*-sig"
-          merge-multiple: true
-          path: sigs
+          name: macos-artifacts
+          path: macos
 
-      - name: Generate and upload latest.json
+      - name: Download Windows artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-artifacts
+          path: windows
+
+      - name: Create release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          VERSION="${{ inputs.tag }}"
-          VERSION="${VERSION#v}"
+          gh release create "${{ inputs.tag }}" \
+            --repo "${{ github.repository }}" \
+            --title "Kurippa ${{ inputs.tag }}" \
+            --generate-notes
+
+      - name: Upload artifacts and generate latest.json
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          TAG="${{ inputs.tag }}"
+          VERSION="${TAG#v}"
           REPO="${{ github.repository }}"
-          BASE_URL="https://github.com/${REPO}/releases/download/v${VERSION}"
+          BASE_URL="https://github.com/${REPO}/releases/download/${TAG}"
+
+          # Stable-name copies
+          cp "$(find macos -name "*.dmg"           | head -1)" Kurippa_universal.dmg
+          cp "$(find macos -name "*.tar.gz"        | head -1)" Kurippa_universal.app.tar.gz
+          cp "$(find windows -name "*.exe"         | head -1)" Kurippa_x64-setup.exe
+          cp "$(find windows -name "*.nsis.zip"    | head -1)" Kurippa_x64-setup.nsis.zip
+
+          gh release upload "$TAG" Kurippa_universal.dmg          --repo "$REPO" --clobber
+          gh release upload "$TAG" Kurippa_universal.app.tar.gz   --repo "$REPO" --clobber
+          gh release upload "$TAG" Kurippa_x64-setup.exe          --repo "$REPO" --clobber
+          gh release upload "$TAG" Kurippa_x64-setup.nsis.zip     --repo "$REPO" --clobber
 
           jq -n \
-            --arg version "$VERSION" \
+            --arg version  "$VERSION" \
             --arg pub_date "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
-            --arg macos_sig "$(cat sigs/Kurippa.app.tar.gz.sig)" \
+            --arg macos_sig "$(cat "$(find macos   -name "*.sig" | head -1)")" \
             --arg macos_url "${BASE_URL}/Kurippa_universal.app.tar.gz" \
-            --arg win_sig "$(cat sigs/windows.sig)" \
-            --arg win_url "${BASE_URL}/Kurippa_${VERSION}_x64-setup.nsis.zip" \
+            --arg win_sig   "$(cat "$(find windows -name "*.sig" | head -1)")" \
+            --arg win_url   "${BASE_URL}/Kurippa_x64-setup.nsis.zip" \
             '{
-              version: $version,
-              notes: "",
+              version:  $version,
+              notes:    "",
               pub_date: $pub_date,
               platforms: {
                 "darwin-universal": { signature: $macos_sig, url: $macos_url },
@@ -212,5 +197,4 @@ jobs:
 
           cat latest.json
 
-          gh release upload "v${VERSION}" latest.json \
-            --repo "${REPO}" --clobber
+          gh release upload "$TAG" latest.json --repo "$REPO" --clobber
