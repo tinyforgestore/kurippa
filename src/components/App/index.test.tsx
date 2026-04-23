@@ -383,12 +383,10 @@ describe("App — keyboard navigation", () => {
     renderApp();
     await waitFor(() => expect(screen.getByText("first")).toBeInTheDocument());
 
-    // Move down twice, then back up once
-    await act(async () => {
-      fireEvent.keyDown(document, { key: "ArrowDown" });
-      fireEvent.keyDown(document, { key: "ArrowDown" });
-      fireEvent.keyDown(document, { key: "ArrowUp" });
-    });
+    // Move down twice, then back up once — separate acts so React flushes between each
+    await act(async () => { fireEvent.keyDown(document, { key: "ArrowDown" }); });
+    await act(async () => { fireEvent.keyDown(document, { key: "ArrowDown" }); });
+    await act(async () => { fireEvent.keyDown(document, { key: "ArrowUp" }); });
 
     const items = document.querySelectorAll("[data-item]");
     expect(items[1]).toHaveAttribute("data-selected");

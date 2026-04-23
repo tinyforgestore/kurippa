@@ -1,4 +1,11 @@
-use tauri::{AppHandle, Manager, Monitor, PhysicalPosition, PhysicalSize, WebviewWindow};
+use std::sync::atomic::{AtomicU32, Ordering};
+use tauri::{AppHandle, LogicalPosition, Manager, Monitor, PhysicalPosition, WebviewWindow};
+
+// Cached primary-monitor scale factor × 1000 (macOS only).
+// Updated every time position_window finds the primary monitor (pos.x == 0 && pos.y == 0).
+// Used as fallback when available_monitors() returns an incomplete list.
+#[cfg(target_os = "macos")]
+static CACHED_PRIMARY_SCALE_X1000: AtomicU32 = AtomicU32::new(0);
 
 const DEFAULT_WIN_W: u32 = 400;
 const DEFAULT_WIN_H: u32 = 500;
@@ -87,7 +94,10 @@ pub fn toggle_window(app: &AppHandle) {
 
     if visible {
         if let Ok(pos) = window.outer_position() {
-            save_window_pos(app, pos.x, pos.y);
+            // outer_position() is physical at the window's current scale.
+            // Save as logical (AppKit points) so the value is scale-independent.
+            let scale = window.scale_factor().unwrap_or(1.0);
+            save_window_pos(app, (pos.x as f64 / scale).round() as i32, (pos.y as f64 / scale).round() as i32);
         }
         let _ = window.hide();
     } else {
@@ -97,28 +107,83 @@ pub fn toggle_window(app: &AppHandle) {
     }
 }
 
-/// Clamps (x, y) so that a window of `win_w × win_h` stays fully within monitor `m`.
-/// Thin adapter over `clamp_to_rect` that converts a `&Monitor` to `Rect`.
-fn clamp_to_monitor(x: i32, y: i32, win_w: u32, win_h: u32, m: &Monitor) -> PhysicalPosition<i32> {
-    clamp_to_rect(x, y, win_w, win_h, &Rect::from(m))
+/// Returns the logical spawn position (AppKit points) for a window of `(win_lw × win_lh)`
+/// on monitor `m`: horizontally centred at `DEFAULT_SPAWN_Y_RATIO` from top, clamped to bounds.
+fn spawn_center_logical(m: &Monitor, win_lw: f64, win_lh: f64) -> (f64, f64) {
+    let mon_scale = m.scale_factor();
+    let p = m.position();
+    let s = m.size();
+    let mon_lx = p.x as f64 / mon_scale;
+    let mon_ly = p.y as f64 / mon_scale;
+    let mon_lw = s.width  as f64 / mon_scale;
+    let mon_lh = s.height as f64 / mon_scale;
+    let lx = mon_lx + (mon_lw - win_lw) / 2.0;
+    let ly = mon_ly + mon_lh * DEFAULT_SPAWN_Y_RATIO;
+    let max_lx = (mon_lx + mon_lw - win_lw).max(mon_lx);
+    let max_ly = (mon_ly + mon_lh - win_lh).max(mon_ly);
+    (lx.clamp(mon_lx, max_lx), ly.clamp(mon_ly, max_ly))
+}
+
+/// Clamps a logical position so that a window of `(win_lw × win_lh)` stays fully within `m`.
+fn clamp_to_monitor_logical(lx: f64, ly: f64, win_lw: f64, win_lh: f64, m: &Monitor) -> (f64, f64) {
+    let mon_scale = m.scale_factor();
+    let p = m.position();
+    let s = m.size();
+    let mon_lx = p.x as f64 / mon_scale;
+    let mon_ly = p.y as f64 / mon_scale;
+    let mon_lw = s.width  as f64 / mon_scale;
+    let mon_lh = s.height as f64 / mon_scale;
+    let max_lx = (mon_lx + mon_lw - win_lw).max(mon_lx);
+    let max_ly = (mon_ly + mon_lh - win_lh).max(mon_ly);
+    (lx.clamp(mon_lx, max_lx), ly.clamp(mon_ly, max_ly))
+}
+
+/// Returns true iff the logical point (lx, ly) falls within the logical bounds
+/// of `rect`, where rect stores physical pixels and scale.
+pub fn logical_point_in_rect(lx: f64, ly: f64, rect: &Rect) -> bool {
+    let lx0 = rect.x as f64 / rect.scale;
+    let ly0 = rect.y as f64 / rect.scale;
+    let lw  = rect.w as f64 / rect.scale;
+    let lh  = rect.h as f64 / rect.scale;
+    lx >= lx0 && lx < lx0 + lw && ly >= ly0 && ly < ly0 + lh
 }
 
 const DEFAULT_SPAWN_Y_RATIO: f64 = 0.30;
 
 /// Chooses and applies the spawn position for the popup window.
 ///
+/// All positioning uses `LogicalPosition` (AppKit points) so tao does not apply
+/// an extra scale-factor division before handing coordinates to AppKit — using
+/// `PhysicalPosition` causes tao to divide by the window's *current* monitor scale
+/// before passing to AppKit, which places the window on the wrong screen when the
+/// target monitor has a different scale than the one the window is currently on.
+///
 /// Priority:
 ///   1. Cursor's current monitor — window centred horizontally at DEFAULT_SPAWN_Y_RATIO from top.
-///   2. Saved position from disk — used as-is if it fits, or clamped to its monitor.
+///   2. Saved position from disk (logical coords) — clamped to its monitor.
 ///   3. First available monitor (same centering), or (50, 50) if none reported.
 pub fn position_window(app: &AppHandle, window: &WebviewWindow) {
-    let win_size = window.outer_size().unwrap_or(PhysicalSize::new(DEFAULT_WIN_W, DEFAULT_WIN_H));
-    let win_w = win_size.width;
-    let win_h = win_size.height;
-
     let monitors: Vec<Monitor> = app.available_monitors().unwrap_or_default();
 
-    // Helper: find the monitor whose PHYSICAL bounds contain (px, py).
+    for m in &monitors {
+        let p = m.position();
+        let s = m.size();
+        log::info!("[position_window] monitor {:?} pos=({},{}) size={}x{} scale={}", m.name(), p.x, p.y, s.width, s.height, m.scale_factor());
+    }
+    if let Ok(c) = app.cursor_position() {
+        log::info!("[position_window] cursor_position=({:.1},{:.1})", c.x, c.y);
+    }
+
+    // Window logical size: outer_size() is physical at the window's current scale.
+    // Use window.scale_factor() (the scale of whichever monitor the pre-warmed window
+    // is on) so this is correct regardless of which monitor that happens to be.
+    let window_scale = window.scale_factor().unwrap_or(1.0);
+    let (win_lw, win_lh) = match window.outer_size() {
+        Ok(s) => (s.width as f64 / window_scale, s.height as f64 / window_scale),
+        Err(_) => (DEFAULT_WIN_W as f64, DEFAULT_WIN_H as f64),
+    };
+
+    // Helper: find the monitor whose PHYSICAL bounds contain (px, py) — Windows path.
     let monitor_at_phys = |px: f64, py: f64| -> Option<&Monitor> {
         monitors.iter().find(|m| {
             let p = m.position();
@@ -130,50 +195,85 @@ pub fn position_window(app: &AppHandle, window: &WebviewWindow) {
         })
     };
 
+    // On macOS, cursor_position() returns primary-physical coords (logical × primary_scale).
+    // Monitor positions are per-monitor-physical (logical × monitor_scale).
+    // Divide cursor by primary_scale to reach AppKit logical, then test against logical
+    // monitor bounds via logical_point_in_rect.
+    //
+    // available_monitors() may return an incomplete list. Cache primary_scale in a static
+    // AtomicU32 so detection stays correct when the primary monitor is absent from the list.
+    #[cfg(target_os = "macos")]
+    let primary_scale = {
+        let found = monitors.iter()
+            .find(|m| { let p = m.position(); p.x == 0 && p.y == 0 })
+            .map(|m| m.scale_factor());
+        if let Some(s) = found {
+            CACHED_PRIMARY_SCALE_X1000.store((s * 1000.0) as u32, Ordering::Relaxed);
+            s
+        } else {
+            let cached = CACHED_PRIMARY_SCALE_X1000.load(Ordering::Relaxed);
+            if cached > 0 { cached as f64 / 1000.0 } else { 1.0 }
+        }
+    };
+    #[cfg(not(target_os = "macos"))]
+    let primary_scale = 1.0_f64;
+
+    let monitor_at_logical = |cx: f64, cy: f64| -> Option<&Monitor> {
+        let lx = cx / primary_scale;
+        let ly = cy / primary_scale;
+        monitors.iter().find(|m| logical_point_in_rect(lx, ly, &Rect::from(*m)))
+    };
+
     // Priority 1: center on cursor's monitor at DEFAULT_SPAWN_Y_RATIO.
+    #[cfg(target_os = "macos")]
+    let cursor_target = app
+        .cursor_position()
+        .ok()
+        .and_then(|c| {
+            let r = monitor_at_logical(c.x, c.y);
+            log::info!("[position_window] primary_scale={} monitor_at_logical({:.1},{:.1}) → {:?}", primary_scale, c.x / primary_scale, c.y / primary_scale, r.and_then(|m| m.name()));
+            r
+        });
+
+    #[cfg(not(target_os = "macos"))]
     let cursor_target = app
         .cursor_position()
         .ok()
         .and_then(|c| monitor_at_phys(c.x, c.y));
 
     if let Some(m) = cursor_target {
-        let p = m.position();
-        let s = m.size();
-        let x = p.x + (s.width as i32 - win_w as i32) / 2;
-        let y = p.y + (s.height as f64 * DEFAULT_SPAWN_Y_RATIO) as i32;
-        let _ = window.set_position(clamp_to_monitor(x, y, win_w, win_h, m));
+        let (lx, ly) = spawn_center_logical(m, win_lw, win_lh);
+        log::info!("[position_window] spawn logical=({:.1},{:.1})", lx, ly);
+        let _ = window.set_position(LogicalPosition::new(lx, ly));
         return;
     }
 
-    // Priority 2: use saved position from disk (physical coords).
+    // Priority 2: use saved position from disk (stored as logical coords).
+    // Find the monitor whose logical bounds contain the saved window centre, then clamp.
     if let Some((sx, sy)) = load_window_pos(app) {
-        if pos_is_safe(sx, sy, win_w, win_h, &monitors) {
-            let _ = window.set_position(PhysicalPosition::new(sx, sy));
-            return;
-        }
-        let cx = sx as f64 + win_w as f64 / 2.0;
-        let cy = sy as f64 + win_h as f64 / 2.0;
-        if let Some(m) = monitor_at_phys(cx, cy) {
-            let _ = window.set_position(clamp_to_monitor(sx, sy, win_w, win_h, m));
+        let sx_l = sx as f64;
+        let sy_l = sy as f64;
+        let center_lx = sx_l + win_lw / 2.0;
+        let center_ly = sy_l + win_lh / 2.0;
+        let saved_monitor = monitors.iter().find(|m| {
+            logical_point_in_rect(center_lx, center_ly, &Rect::from(*m))
+        });
+        if let Some(m) = saved_monitor {
+            let (lx, ly) = clamp_to_monitor_logical(sx_l, sy_l, win_lw, win_lh, m);
+            let _ = window.set_position(LogicalPosition::new(lx, ly));
             return;
         }
     }
 
-    // Fallback: first available monitor.
-    let spawn_pos = match monitors.first() {
-        Some(m) => {
-            let p = m.position();
-            let s = m.size();
-            let x = p.x + (s.width as i32 - win_w as i32) / 2;
-            let y = p.y + (s.height as f64 * DEFAULT_SPAWN_Y_RATIO) as i32;
-            clamp_to_monitor(x, y, win_w, win_h, m)
-        }
+    // Priority 3: first available monitor.
+    let (lx, ly) = match monitors.first() {
+        Some(m) => spawn_center_logical(m, win_lw, win_lh),
         None => {
             log::warn!("position_window: no monitors reported, falling back to (50,50)");
-            PhysicalPosition::new(50, 50)
+            (50.0, 50.0)
         }
     };
-    let _ = window.set_position(spawn_pos);
+    let _ = window.set_position(LogicalPosition::new(lx, ly));
 }
 
 #[cfg(test)]
@@ -314,5 +414,40 @@ mod tests {
     #[test]
     fn pos_is_safe_rects_empty_list() {
         assert!(!pos_is_safe_rects(0, 0, 400, 500, &[]));
+    }
+
+    // ------------------------------------------------------------------ //
+    // logical_point_in_rect
+    // ------------------------------------------------------------------ //
+
+    #[test]
+    fn logical_point_in_rect_retina_inside() {
+        // Physical (0,0,2880x1800) at scale 2.0 → logical (0,0,1440x900)
+        let r = Rect { x: 0, y: 0, w: 2880, h: 1800, scale: 2.0 };
+        assert!(logical_point_in_rect(720.0, 450.0, &r));
+    }
+
+    #[test]
+    fn logical_point_in_rect_retina_outside_logical_but_inside_physical() {
+        // Physical (0,0,2880x1800) at scale 2.0 → logical (0,0,1440x900)
+        // Logical point (1500, 300) is outside logical width 1440, even though 1500 < 2880
+        let r = Rect { x: 0, y: 0, w: 2880, h: 1800, scale: 2.0 };
+        assert!(!logical_point_in_rect(1500.0, 300.0, &r));
+    }
+
+    #[test]
+    fn logical_point_in_rect_secondary_scale_1() {
+        // Secondary at physical x=2880, scale 1.0 → logical x0=2880, lw=1920
+        let r = Rect { x: 2880, y: 0, w: 1920, h: 1080, scale: 1.0 };
+        assert!(logical_point_in_rect(3000.0, 100.0, &r));
+        assert!(!logical_point_in_rect(2800.0, 100.0, &r));
+    }
+
+    #[test]
+    fn logical_point_in_rect_scale_1_matches_physical() {
+        // When scale=1.0, logical and physical coordinates are identical
+        let r = Rect { x: 1920, y: 0, w: 1920, h: 1080, scale: 1.0 };
+        assert!(logical_point_in_rect(2000.0, 500.0, &r));
+        assert!(!logical_point_in_rect(1000.0, 500.0, &r));
     }
 }
