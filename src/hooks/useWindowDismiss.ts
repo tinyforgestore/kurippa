@@ -12,7 +12,7 @@ export function useWindowDismiss(onShow?: () => void) {
   const lastFocusedAt = useRef<number>(0);
 
   const onShowRef = useRef(onShow);
-  onShowRef.current = onShow;
+  useEffect(() => { onShowRef.current = onShow; });
 
   const dismiss = useCallback(() => {
     setQuery("");
