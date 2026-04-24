@@ -1,4 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef } from "react";
+import { useAtomValue, useSetAtom } from "jotai";
+import { useLocation } from "react-router-dom";
 import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
 import { useClipboardHistory } from "@/hooks/useClipboardHistory";
@@ -14,7 +16,11 @@ import { useClearConfirm } from "@/hooks/useClearConfirm";
 import { useFolderActions } from "@/hooks/useFolderActions";
 import { usePasteActions } from "@/hooks/usePasteActions";
 import { useAppKeyboard } from "@/hooks/useAppKeyboard";
+import { useAppNavigation } from "@/hooks/useAppNavigation";
 import { ClipboardItem } from "@/types";
+import { updateInfoAtom, pasteAsPreviewTextAtom } from "@/atoms/ui";
+import { queryAtom, selectedIndexAtom } from "@/atoms/navigation";
+import { visibleEntriesAtom, inPinnedSectionAtom, expandedFolderIdAtom } from "@/atoms/derived";
 
 export type AppScreen =
   | { kind: "history" }
@@ -30,10 +36,20 @@ interface UseAppStateParams {
 }
 
 export function useAppState({ onTrialError, isActivated = false }: UseAppStateParams = {}) {
+  const location = useLocation();
+  const nav = useAppNavigation();
   const resetSelectionRef = useRef<() => void>(() => {});
-  const [pasteAsPreviewText, setPasteAsPreviewText] = useState<string | null>(null);
-  const [screen, setScreen] = useState<AppScreen>({ kind: "history" });
-  const [updateInfo, setUpdateInfo] = useState<{ version: string } | null>(null);
+
+  const updateInfo = useAtomValue(updateInfoAtom);
+  const setUpdateInfo = useSetAtom(updateInfoAtom);
+  const setPasteAsPreviewText = useSetAtom(pasteAsPreviewTextAtom);
+  const pasteAsPreviewText = useAtomValue(pasteAsPreviewTextAtom);
+  const query = useAtomValue(queryAtom);
+  const selectedIndex = useAtomValue(selectedIndexAtom);
+  const setSelectedIndex = useSetAtom(selectedIndexAtom);
+  const visibleEntries = useAtomValue(visibleEntriesAtom);
+  const inPinnedSection = useAtomValue(inPinnedSectionAtom);
+  const expandedFolderId = useAtomValue(expandedFolderIdAtom);
 
   const folderNameInputValueSetterRef = useRef<(v: string) => void>(() => {});
   const cancelClearConfirmRef = useRef<() => void>(() => {});
@@ -42,45 +58,38 @@ export function useAppState({ onTrialError, isActivated = false }: UseAppStatePa
   const defaultSeparator = useDefaultSeparator();
 
   const {
-    folders,
     loadFolders,
     createFolder,
     renameFolder,
     deleteFolder,
     moveItemToFolder: _moveItemToFolder,
     removeItemFromFolder: _removeItemFromFolder,
-    maxFoldersToast,
   } = useFolders({ onTrialError });
 
-  const inputActive = screen.kind === "folderNameInput";
+  const inputActive = location.pathname === "/folder-name-input";
 
-  const { query, setQuery, inputRef, dismiss } = useWindowDismiss(() => {
+  const { setQuery, inputRef, dismiss } = useWindowDismiss(() => {
     resetSelectionRef.current();
-    setScreen({ kind: "history" });
+    nav.toHistory();
     folderNameInputValueSetterRef.current("");
     cancelClearConfirmRef.current();
     multiSelect.exitMode();
   });
 
-  const { results, deleteItem, togglePinItem, clearNonPinned, reloadHistory } = useClipboardHistory(query, folders);
+  const { deleteItem, togglePinItem, clearNonPinned, reloadHistory } = useClipboardHistory();
 
   const {
-    visibleEntries,
-    inPinnedSection,
-    expandedFolderId,
     enterPinnedSection,
     exitPinnedSection,
     enterFolderSection,
     exitFolderSection,
-  } = useSectionNavigation(results, folders, query);
+  } = useSectionNavigation();
 
   const { isOpen: isPreviewOpen, open: openPreview, close: closePreview } = usePreviewPanel();
 
   const clearConfirm = useClearConfirm({ clearNonPinned });
 
   const folderActions = useFolderActions({
-    screen,
-    setScreen,
     createFolder,
     renameFolder,
     deleteFolder,
@@ -96,7 +105,6 @@ export function useAppState({ onTrialError, isActivated = false }: UseAppStatePa
   cancelClearConfirmRef.current = clearConfirm.onCancel;
 
   const { executePasteOption, onMergePaste } = usePasteActions({
-    setScreen,
     multiSelect,
     dismiss,
     onTrialError,
@@ -106,8 +114,6 @@ export function useAppState({ onTrialError, isActivated = false }: UseAppStatePa
   const pinAnimationRef = useRef<((id: number) => void) | null>(null);
 
   useAppKeyboard({
-    screen,
-    setScreen,
     multiSelect,
     visibleEntries,
     selectedIndexRef,
@@ -135,7 +141,7 @@ export function useAppState({ onTrialError, isActivated = false }: UseAppStatePa
       }
     }).then((fn) => { unlisten = fn; }).catch(console.error);
     return () => { unlisten?.(); };
-  }, []);
+  }, [setUpdateInfo]);
 
   const installUpdate = useCallback(() => {
     invoke("install_update").catch(console.error);
@@ -146,12 +152,12 @@ export function useAppState({ onTrialError, isActivated = false }: UseAppStatePa
       localStorage.setItem("dismissed_update_version", updateInfo.version);
     }
     setUpdateInfo(null);
-  }, [updateInfo]);
+  }, [updateInfo, setUpdateInfo]);
 
-  const { selectedIndex, setSelectedIndex, listRef, pasteSelected, deletingId } = useItemSelection(
-    visibleEntries,
+  const { listRef, pasteSelected, deletingId } = useItemSelection(
+    undefined,
     dismiss,
-    query,
+    undefined,
     {
       onPinToggle: (id: number) => pinAnimationRef.current?.(id),
       onDelete: deleteItem,
@@ -161,12 +167,12 @@ export function useAppState({ onTrialError, isActivated = false }: UseAppStatePa
       onEnterFolderSection: enterFolderSection,
       onExitFolderSection: exitFolderSection,
       expandedFolderId,
-      onDeleteFolder: (id: number, name: string) => setScreen({ kind: "folderDelete", target: { id, name } }),
+      onDeleteFolder: (id: number, name: string) => nav.toFolderDelete({ id, name }),
       onOpenPreview: openPreview,
       onClosePreview: closePreview,
-      onOpenPasteAs: (item: ClipboardItem) => setScreen({ kind: "pasteAs", item }),
-      enabled: screen.kind === "history" && !clearConfirm.show && !multiSelect.active,
-      navigationEnabled: screen.kind === "history",
+      onOpenPasteAs: (item: ClipboardItem) => nav.toPasteAs(item),
+      enabled: location.pathname === "/" && !clearConfirm.show && !multiSelect.active,
+      navigationEnabled: location.pathname === "/",
     }
   );
 
@@ -199,8 +205,6 @@ export function useAppState({ onTrialError, isActivated = false }: UseAppStatePa
     liftingId,
     landingId,
     deletingId,
-    screen,
-    setScreen,
     executePasteOption,
     setPasteAsPreviewText,
     openPreview,
@@ -211,8 +215,7 @@ export function useAppState({ onTrialError, isActivated = false }: UseAppStatePa
     multiSelect,
     defaultSeparator,
     onMergePaste,
-    onCancelSeparator: () => setScreen({ kind: "history" }),
-    folders,
+    onCancelSeparator: () => nav.toHistory(),
     folderNameInputValue: folderActions.folderNameInputValue,
     setFolderNameInputValue: folderActions.setFolderNameInputValue,
     confirmFolderNameInput: folderActions.confirmFolderNameInput,
@@ -222,7 +225,6 @@ export function useAppState({ onTrialError, isActivated = false }: UseAppStatePa
     expandedFolderId,
     enterFolderSection,
     exitFolderSection,
-    maxFoldersToast,
     updateInfo,
     installUpdate,
     dismissUpdate,

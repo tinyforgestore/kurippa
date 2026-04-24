@@ -1,10 +1,17 @@
-import { useRef, useState } from "react";
+import { useRef } from "react";
+import { useAtomValue, useSetAtom } from "jotai";
+import {
+  multiSelectActiveAtom,
+  multiSelectSelectionsAtom,
+  multiSelectFlashingIdAtom,
+  multiSelectMaxToastVisibleAtom,
+} from "@/atoms/multiSelect";
 
 export interface MultiSelectState {
   active: boolean;
-  selections: number[]; // item IDs in selection order (max 5)
-  flashingId: number | null; // item that flashed due to max-5 attempt
-  maxToastVisible: boolean; // "Max 5 items" message
+  selections: number[];
+  flashingId: number | null;
+  maxToastVisible: boolean;
   enterMode: (initialItemId: number) => void;
   exitMode: () => void;
   toggleSelection: (itemId: number, isSelectable: boolean) => void;
@@ -15,10 +22,15 @@ const FLASH_DURATION_MS = 150;
 const TOAST_DURATION_MS = 1500;
 
 export function useMultiSelect(): MultiSelectState {
-  const [active, setActive] = useState(false);
-  const [selections, setSelections] = useState<number[]>([]);
-  const [flashingId, setFlashingId] = useState<number | null>(null);
-  const [maxToastVisible, setMaxToastVisible] = useState(false);
+  const active = useAtomValue(multiSelectActiveAtom);
+  const selections = useAtomValue(multiSelectSelectionsAtom);
+  const flashingId = useAtomValue(multiSelectFlashingIdAtom);
+  const maxToastVisible = useAtomValue(multiSelectMaxToastVisibleAtom);
+
+  const setActive = useSetAtom(multiSelectActiveAtom);
+  const setSelections = useSetAtom(multiSelectSelectionsAtom);
+  const setFlashingId = useSetAtom(multiSelectFlashingIdAtom);
+  const setMaxToastVisible = useSetAtom(multiSelectMaxToastVisibleAtom);
 
   const flashTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const toastTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -54,7 +66,6 @@ export function useMultiSelect(): MultiSelectState {
         return prev.filter((id) => id !== itemId);
       }
       if (prev.length >= MAX_SELECTIONS) {
-        // Flash the item and show the toast
         if (flashTimerRef.current) clearTimeout(flashTimerRef.current);
         if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
         setFlashingId(itemId);

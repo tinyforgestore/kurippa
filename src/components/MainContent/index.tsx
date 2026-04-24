@@ -1,6 +1,6 @@
 import { RefObject } from "react";
+import { Routes, Route, useLocation, useNavigate } from "react-router-dom";
 import { Folder, ListEntry } from "@/types";
-import { AppScreen } from "@/hooks/useAppState";
 import { PasteOption } from "@/utils/pasteAs";
 import { PasteAsMenu } from "@/components/PasteAsMenu";
 import { SeparatorPicker } from "@/components/SeparatorPicker";
@@ -10,8 +10,6 @@ import { FolderPicker } from "@/components/FolderPicker";
 import { HistoryList } from "@/components/HistoryList";
 
 interface MainContentProps {
-  screen: AppScreen;
-  setScreen: (s: AppScreen) => void;
   executePasteOption: (opt: PasteOption) => void;
   setPasteAsPreviewText: (text: string | null) => void;
   openPreview: () => void;
@@ -41,8 +39,6 @@ interface MainContentProps {
 }
 
 export function MainContent({
-  screen,
-  setScreen,
   executePasteOption,
   setPasteAsPreviewText,
   openPreview,
@@ -70,98 +66,112 @@ export function MainContent({
   selections,
   flashingId,
 }: MainContentProps) {
-  switch (screen.kind) {
-    case "pasteAs":
-      return (
-        <PasteAsMenu
-          item={screen.item}
-          onClose={() => setScreen({ kind: "history" })}
-          onSelect={executePasteOption}
-          onCursorChange={setPasteAsPreviewText}
-          onOpenPreview={openPreview}
-        />
-      );
+  const location = useLocation();
+  const navigate = useNavigate();
 
-    case "separatorPicker":
-      return (
-        <SeparatorPicker
-          onConfirm={onMergePaste}
-          onCancel={() => setScreen({ kind: "history" })}
-          defaultSeparator={defaultSeparator}
-        />
-      );
-
-    case "folderNameInput":
-      return (
-        <FolderNameInput
-          value={folderNameInputValue}
-          onChange={setFolderNameInputValue}
-          onConfirm={confirmFolderNameInput}
-          onCancel={() => setScreen({ kind: "history" })}
-          placeholder={screen.mode === "create" ? "New folder name" : "Rename folder"}
-        />
-      );
-
-    case "folderDelete":
-      return (
-        <FolderDeleteConfirm
-          folderName={screen.target.name}
-          onConfirm={() => confirmFolderDelete(true)}
-          onCancel={() => setScreen({ kind: "history" })}
-        />
-      );
-
-    case "folderPicker": {
-      const pickerEntry = visibleEntries.find(
-        (e) => e.kind === "item" && e.result.item.id === screen.itemId
-      );
-      const currentFolderId =
-        pickerEntry?.kind === "item" ? (pickerEntry.result.item.folder_id ?? null) : null;
-      return (
-        <FolderPicker
-          folders={folders}
-          currentFolderId={currentFolderId}
-          onSelectFolder={(folderId) => {
-            moveItemToFolder(screen.itemId, folderId);
-            setScreen({ kind: "history" });
-          }}
-          onRemoveFromFolder={() => {
-            removeItemFromFolder(screen.itemId);
-            setScreen({ kind: "history" });
-          }}
-          onCreateNewFolder={() => {
-            setFolderNameInputValue("");
-            setScreen({
-              kind: "folderNameInput",
-              mode: "create",
-              targetId: null,
-              pickerItemId: screen.itemId,
-            });
-          }}
-          onCancel={() => setScreen({ kind: "history" })}
-        />
-      );
-    }
-
-    case "history":
-    default:
-      return (
-        <HistoryList
-          visibleEntries={visibleEntries}
-          selectedIndex={selectedIndex}
-          listRef={listRef}
-          onHoverItem={setSelectedIndex}
-          onClickItem={onClickItem}
-          onEnterSection={enterPinnedSection}
-          onEnterFolderSection={enterFolderSection}
-          expandedFolderId={expandedFolderId}
-          liftingId={liftingId}
-          landingId={landingId}
-          deletingId={deletingId}
-          multiSelectActive={multiSelectActive}
-          selections={selections}
-          flashingId={flashingId}
-        />
-      );
-  }
+  return (
+    <Routes>
+      <Route
+        path="/paste-as"
+        element={
+          <PasteAsMenu
+            item={(location.state as { item: ReturnType<typeof Object> } | null)?.item}
+            onClose={() => navigate("/")}
+            onSelect={executePasteOption}
+            onCursorChange={setPasteAsPreviewText}
+            onOpenPreview={openPreview}
+          />
+        }
+      />
+      <Route
+        path="/separator-picker"
+        element={
+          <SeparatorPicker
+            onConfirm={onMergePaste}
+            onCancel={() => navigate("/")}
+            defaultSeparator={defaultSeparator}
+          />
+        }
+      />
+      <Route
+        path="/folder-name-input"
+        element={
+          <FolderNameInput
+            value={folderNameInputValue}
+            onChange={setFolderNameInputValue}
+            onConfirm={confirmFolderNameInput}
+            onCancel={() => navigate("/")}
+            placeholder={
+              (location.state as { mode?: string } | null)?.mode === "create"
+                ? "New folder name"
+                : "Rename folder"
+            }
+          />
+        }
+      />
+      <Route
+        path="/folder-delete"
+        element={
+          <FolderDeleteConfirm
+            folderName={(location.state as { target: { id: number; name: string } } | null)?.target?.name ?? ""}
+            onConfirm={() => confirmFolderDelete(true)}
+            onCancel={() => navigate("/")}
+          />
+        }
+      />
+      <Route
+        path="/folder-picker"
+        element={(() => {
+          const itemId = (location.state as { itemId: number } | null)?.itemId ?? 0;
+          const pickerEntry = visibleEntries.find(
+            (e) => e.kind === "item" && e.result.item.id === itemId
+          );
+          const currentFolderId =
+            pickerEntry?.kind === "item" ? (pickerEntry.result.item.folder_id ?? null) : null;
+          return (
+            <FolderPicker
+              folders={folders}
+              currentFolderId={currentFolderId}
+              onSelectFolder={(folderId) => {
+                moveItemToFolder(itemId, folderId);
+                navigate("/");
+              }}
+              onRemoveFromFolder={() => {
+                removeItemFromFolder(itemId);
+                navigate("/");
+              }}
+              onCreateNewFolder={() => {
+                setFolderNameInputValue("");
+                navigate("/folder-name-input", {
+                  state: { mode: "create", targetId: null, pickerItemId: itemId },
+                });
+              }}
+              onCancel={() => navigate("/")}
+            />
+          );
+        })()}
+      />
+      <Route
+        path="*"
+        element={
+          <HistoryList
+            visibleEntries={visibleEntries}
+            selectedIndex={selectedIndex}
+            listRef={listRef}
+            onHoverItem={setSelectedIndex}
+            onClickItem={onClickItem}
+            onEnterSection={enterPinnedSection}
+            onEnterFolderSection={enterFolderSection}
+            expandedFolderId={expandedFolderId}
+            liftingId={liftingId}
+            landingId={landingId}
+            deletingId={deletingId}
+            multiSelectActive={multiSelectActive}
+            selections={selections}
+            flashingId={flashingId}
+          />
+        }
+      />
+    </Routes>
+  );
 }

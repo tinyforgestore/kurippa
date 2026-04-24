@@ -5,6 +5,21 @@ import { usePasteActions } from "@/hooks/usePasteActions";
 const mockInvoke = vi.fn();
 vi.mock("@tauri-apps/api/core", () => ({ invoke: (...args: unknown[]) => mockInvoke(...args) }));
 
+const mockNav = {
+  toHistory: vi.fn(),
+  toPasteAs: vi.fn(),
+  toSeparatorPicker: vi.fn(),
+  toFolderNameInput: vi.fn(),
+  toFolderDelete: vi.fn(),
+  toFolderPicker: vi.fn(),
+};
+vi.mock("@/hooks/useAppNavigation", () => ({ useAppNavigation: () => mockNav }));
+
+vi.mock("react-router-dom", () => ({
+  useNavigate: () => vi.fn(),
+  useLocation: () => ({ pathname: "/", state: null }),
+}));
+
 function makeMultiSelect(overrides = {}) {
   return {
     selections: [] as number[],
@@ -18,18 +33,16 @@ describe("usePasteActions", () => {
 
   describe("executePasteOption", () => {
     it("invokes paste_item with plainText=true for paste-text action", () => {
-      const setScreen = vi.fn();
-      const { result } = renderHook(() => usePasteActions({ setScreen, multiSelect: makeMultiSelect(), dismiss: vi.fn() }));
+      const { result } = renderHook(() => usePasteActions({ multiSelect: makeMultiSelect(), dismiss: vi.fn() }));
       act(() => result.current.executePasteOption({
         label: "Plain text", action: { kind: "paste-text", text: "hello", itemId: 1 },
       }));
       expect(mockInvoke).toHaveBeenCalledWith("paste_item", { text: "hello", plainText: true, itemId: 1 });
-      expect(setScreen).toHaveBeenCalledWith({ kind: "history" });
+      expect(mockNav.toHistory).toHaveBeenCalledOnce();
     });
 
     it("invokes paste_item with plainText=false for paste-as action", () => {
-      const setScreen = vi.fn();
-      const { result } = renderHook(() => usePasteActions({ setScreen, multiSelect: makeMultiSelect(), dismiss: vi.fn() }));
+      const { result } = renderHook(() => usePasteActions({ multiSelect: makeMultiSelect(), dismiss: vi.fn() }));
       act(() => result.current.executePasteOption({
         label: "Rich text", action: { kind: "paste-rich", text: "<b>hi</b>", itemId: 2 },
       }));
@@ -37,8 +50,7 @@ describe("usePasteActions", () => {
     });
 
     it("invokes paste_image_item for paste-image action", () => {
-      const setScreen = vi.fn();
-      const { result } = renderHook(() => usePasteActions({ setScreen, multiSelect: makeMultiSelect(), dismiss: vi.fn() }));
+      const { result } = renderHook(() => usePasteActions({ multiSelect: makeMultiSelect(), dismiss: vi.fn() }));
       act(() => result.current.executePasteOption({
         label: "Image", action: { kind: "paste-image", imageFilename: "img.png", itemId: 3 },
       }));
@@ -48,25 +60,23 @@ describe("usePasteActions", () => {
 
   describe("onMergePaste", () => {
     it("invokes merge_and_paste_items with selections and separator", async () => {
-      const setScreen = vi.fn();
       const dismiss = vi.fn();
       const multiSelect = makeMultiSelect({ selections: [1, 2, 3] });
-      const { result } = renderHook(() => usePasteActions({ setScreen, multiSelect, dismiss }));
+      const { result } = renderHook(() => usePasteActions({ multiSelect, dismiss }));
       await act(() => result.current.onMergePaste(","));
       expect(mockInvoke).toHaveBeenCalledWith("merge_and_paste_items", { itemIds: [1, 2, 3], separator: "," });
       expect(multiSelect.exitMode).toHaveBeenCalledOnce();
-      expect(setScreen).toHaveBeenCalledWith({ kind: "history" });
+      expect(mockNav.toHistory).toHaveBeenCalledOnce();
       expect(dismiss).toHaveBeenCalledOnce();
     });
 
     it("calls onTrialError with 'Multi-paste' when error is 'trial'", async () => {
       mockInvoke.mockRejectedValueOnce("trial");
-      const setScreen = vi.fn();
       const dismiss = vi.fn();
       const onTrialError = vi.fn();
       const multiSelect = makeMultiSelect({ selections: [1, 2] });
       const { result } = renderHook(() =>
-        usePasteActions({ setScreen, multiSelect, dismiss, onTrialError })
+        usePasteActions({ multiSelect, dismiss, onTrialError })
       );
       await act(() => result.current.onMergePaste(","));
       expect(onTrialError).toHaveBeenCalledWith("Multi-paste");
@@ -76,41 +86,38 @@ describe("usePasteActions", () => {
     it("calls console.error for non-trial merge errors", async () => {
       mockInvoke.mockRejectedValueOnce("some_other_error");
       const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-      const setScreen = vi.fn();
       const dismiss = vi.fn();
       const multiSelect = makeMultiSelect({ selections: [1] });
       const { result } = renderHook(() =>
-        usePasteActions({ setScreen, multiSelect, dismiss })
+        usePasteActions({ multiSelect, dismiss })
       );
       await act(() => result.current.onMergePaste(","));
       expect(consoleSpy).toHaveBeenCalledWith("some_other_error");
       consoleSpy.mockRestore();
     });
 
-    it("does not call setScreen or dismiss when merge fails", async () => {
+    it("does not call toHistory or dismiss when merge fails", async () => {
       mockInvoke.mockRejectedValueOnce("trial");
-      const setScreen = vi.fn();
       const dismiss = vi.fn();
       const onTrialError = vi.fn();
       const multiSelect = makeMultiSelect({ selections: [1] });
       const { result } = renderHook(() =>
-        usePasteActions({ setScreen, multiSelect, dismiss, onTrialError })
+        usePasteActions({ multiSelect, dismiss, onTrialError })
       );
       await act(() => result.current.onMergePaste(","));
-      expect(setScreen).not.toHaveBeenCalled();
+      expect(mockNav.toHistory).not.toHaveBeenCalled();
       expect(dismiss).not.toHaveBeenCalled();
     });
   });
 
   describe("executePasteOption — no-op when action is missing", () => {
     it("does not invoke any command when action is undefined", () => {
-      const setScreen = vi.fn();
       const { result } = renderHook(() =>
-        usePasteActions({ setScreen, multiSelect: makeMultiSelect(), dismiss: vi.fn() })
+        usePasteActions({ multiSelect: makeMultiSelect(), dismiss: vi.fn() })
       );
       act(() => result.current.executePasteOption({ label: "No action", submenu: [] }));
       expect(mockInvoke).not.toHaveBeenCalled();
-      expect(setScreen).not.toHaveBeenCalled();
+      expect(mockNav.toHistory).not.toHaveBeenCalled();
     });
   });
 });

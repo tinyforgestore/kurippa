@@ -1,27 +1,30 @@
-import { useState, useEffect, useCallback } from "react";
+import { useEffect, useCallback } from "react";
+import { useAtomValue, useSetAtom } from "jotai";
 import { invoke } from "@tauri-apps/api/core";
-import { Folder } from "@/types";
+import { foldersAtom, maxFoldersToastAtom } from "@/atoms/folders";
 
 interface UseFoldersParams {
   onTrialError?: (feature: string) => void;
 }
 
 export function useFolders({ onTrialError }: UseFoldersParams = {}) {
-  const [folders, setFolders] = useState<Folder[]>([]);
-  const [maxFoldersToast, setMaxFoldersToast] = useState(false);
+  const folders = useAtomValue(foldersAtom);
+  const maxFoldersToast = useAtomValue(maxFoldersToastAtom);
+  const setFolders = useSetAtom(foldersAtom);
+  const setMaxFoldersToast = useSetAtom(maxFoldersToastAtom);
 
   const loadFolders = useCallback(() => {
-    invoke<Folder[]>("get_folders")
-      .then(setFolders)
+    invoke("get_folders")
+      .then((f) => setFolders(f as Parameters<typeof setFolders>[0]))
       .catch(console.error);
-  }, []);
+  }, [setFolders]);
 
   useEffect(() => {
     loadFolders();
   }, [loadFolders]);
 
   const createFolder = useCallback((name: string) => {
-    return invoke<Folder>("create_folder", { name })
+    return invoke<{ id: number; name: string; created_at: number; position: number }>("create_folder", { name })
       .then((folder) => {
         setFolders((prev) => [...prev, folder]);
         return folder;
@@ -35,7 +38,7 @@ export function useFolders({ onTrialError }: UseFoldersParams = {}) {
         }
         throw err;
       });
-  }, [onTrialError]);
+  }, [onTrialError, setFolders, setMaxFoldersToast]);
 
   const renameFolder = useCallback((id: number, name: string) => {
     return invoke("rename_folder", { id, name })
@@ -43,7 +46,7 @@ export function useFolders({ onTrialError }: UseFoldersParams = {}) {
         setFolders((prev) => prev.map((f) => f.id === id ? { ...f, name } : f));
       })
       .catch(console.error);
-  }, []);
+  }, [setFolders]);
 
   const deleteFolder = useCallback((id: number, deleteItems: boolean) => {
     return invoke("delete_folder", { id, deleteItems })
@@ -51,7 +54,7 @@ export function useFolders({ onTrialError }: UseFoldersParams = {}) {
         setFolders((prev) => prev.filter((f) => f.id !== id));
       })
       .catch(console.error);
-  }, []);
+  }, [setFolders]);
 
   const moveItemToFolder = useCallback((itemId: number, folderId: number) => {
     return invoke("move_item_to_folder", { itemId, folderId })
@@ -77,12 +80,12 @@ export function useFolders({ onTrialError }: UseFoldersParams = {}) {
 
   return {
     folders,
+    maxFoldersToast,
     loadFolders,
     createFolder,
     renameFolder,
     deleteFolder,
     moveItemToFolder,
     removeItemFromFolder,
-    maxFoldersToast,
   };
 }

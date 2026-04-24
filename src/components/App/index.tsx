@@ -1,3 +1,5 @@
+import { useLocation } from "react-router-dom";
+import { useAtomValue } from "jotai";
 import { useApp } from "@/hooks/useApp";
 import { Topbar } from "@/components/Topbar";
 import { MainContent } from "@/components/MainContent";
@@ -8,8 +10,10 @@ import { UpdateBanner } from "@/components/UpdateBanner";
 import { UpgradeBanner } from "@/components/UpgradeBanner";
 import { PermissionsDialog } from "@/components/PermissionsDialog";
 import { container, inlineToast, inlineToastGreen, mainColumn, reactivateBtn } from "@/components/App/index.css";
+import { foldersAtom, maxFoldersToastAtom } from "@/atoms/folders";
 
 function App() {
+  const location = useLocation();
   const {
     theme,
     mode,
@@ -33,8 +37,6 @@ function App() {
     liftingId,
     landingId,
     deletingId,
-    screen,
-    setScreen,
     executePasteOption,
     setPasteAsPreviewText,
     openPreview,
@@ -45,7 +47,6 @@ function App() {
     multiSelect,
     defaultSeparator,
     onMergePaste,
-    folders,
     folderNameInputValue,
     setFolderNameInputValue,
     confirmFolderNameInput,
@@ -54,11 +55,13 @@ function App() {
     removeItemFromFolder,
     expandedFolderId,
     enterFolderSection,
-    maxFoldersToast,
     updateInfo,
     installUpdate,
     dismissUpdate,
   } = useApp();
+
+  const folders = useAtomValue(foldersAtom);
+  const maxFoldersToast = useAtomValue(maxFoldersToastAtom);
 
   if (mode === "first_launch") {
     return null;
@@ -74,12 +77,12 @@ function App() {
           query={query}
           onQueryChange={setQuery}
           onDismiss={dismiss}
-          overlayActive={screen.kind !== "history" || multiSelect.active}
+          overlayActive={location.pathname !== "/" || multiSelect.active}
           theme={theme}
           licenseMode={mode}
           onOpenActivation={openActivationWindow}
         />
-        {multiSelect.active && screen.kind !== "separatorPicker" && (
+        {multiSelect.active && location.pathname !== "/separator-picker" && (
           <MultiSelectIndicator
             selections={multiSelect.selections}
             maxToastVisible={multiSelect.maxToastVisible}
@@ -112,8 +115,6 @@ function App() {
           />
         )}
         <MainContent
-          screen={screen}
-          setScreen={setScreen}
           executePasteOption={executePasteOption}
           setPasteAsPreviewText={setPasteAsPreviewText}
           openPreview={openPreview}

@@ -1,5 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
+import { useAtomValue, useSetAtom } from "jotai";
 import { invoke } from "@tauri-apps/api/core";
+import { clearConfirmShowAtom } from "@/atoms/ui";
 
 interface UseClearConfirmParams {
   clearNonPinned: () => void;
@@ -13,7 +15,8 @@ export interface ClearConfirmState {
 }
 
 export function useClearConfirm({ clearNonPinned }: UseClearConfirmParams): ClearConfirmState {
-  const [show, setShow] = useState(false);
+  const show = useAtomValue(clearConfirmShowAtom);
+  const setShow = useSetAtom(clearConfirmShowAtom);
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -28,7 +31,7 @@ export function useClearConfirm({ clearNonPinned }: UseClearConfirmParams): Clea
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [show]);
+  }, [show, setShow]);
 
   return {
     show,

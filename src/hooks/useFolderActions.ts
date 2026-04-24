@@ -1,10 +1,11 @@
-import { useCallback, useState } from "react";
-import { AppScreen } from "@/hooks/useAppState";
+import { useCallback } from "react";
+import { useAtomValue, useSetAtom } from "jotai";
+import { useLocation } from "react-router-dom";
+import { useAppNavigation } from "@/hooks/useAppNavigation";
 import { Folder } from "@/types";
+import { folderNameInputValueAtom } from "@/atoms/folders";
 
 interface UseFolderActionsParams {
-  screen: AppScreen;
-  setScreen: (s: AppScreen) => void;
   createFolder: (name: string) => Promise<Folder>;
   renameFolder: (id: number, name: string) => Promise<void | undefined>;
   deleteFolder: (id: number, deleteItems: boolean) => Promise<void | undefined>;
@@ -15,8 +16,6 @@ interface UseFolderActionsParams {
 }
 
 export function useFolderActions({
-  screen,
-  setScreen,
   createFolder,
   renameFolder,
   deleteFolder,
@@ -25,7 +24,10 @@ export function useFolderActions({
   loadFolders,
   reloadHistory,
 }: UseFolderActionsParams) {
-  const [folderNameInputValue, setFolderNameInputValue] = useState("");
+  const location = useLocation();
+  const nav = useAppNavigation();
+  const folderNameInputValue = useAtomValue(folderNameInputValueAtom);
+  const setFolderNameInputValue = useSetAtom(folderNameInputValueAtom);
 
   const moveItemToFolder = useCallback((itemId: number, folderId: number) => {
     return _moveItemToFolder(itemId, folderId).then(() => reloadHistory());
@@ -36,10 +38,14 @@ export function useFolderActions({
   }, [_removeItemFromFolder, reloadHistory]);
 
   const confirmFolderNameInput = useCallback(() => {
-    if (screen.kind !== "folderNameInput") return;
+    if (location.pathname !== "/folder-name-input") return;
+    const { mode, targetId, pickerItemId } = location.state as {
+      mode: "create" | "rename";
+      targetId: number | null;
+      pickerItemId: number | null;
+    };
     const name = folderNameInputValue.trim();
-    const { mode, targetId, pickerItemId } = screen;
-    setScreen({ kind: "history" });
+    nav.toHistory();
     setFolderNameInputValue("");
     if (!name) return;
     if (mode === "create") {
@@ -57,17 +63,17 @@ export function useFolderActions({
         .then(() => loadFolders())
         .catch(console.error);
     }
-  }, [screen, setScreen, folderNameInputValue, createFolder, _moveItemToFolder, renameFolder, loadFolders, reloadHistory]);
+  }, [location, nav, folderNameInputValue, createFolder, _moveItemToFolder, renameFolder, loadFolders, reloadHistory, setFolderNameInputValue]);
 
   const confirmFolderDelete = useCallback((deleteItems: boolean) => {
-    if (screen.kind !== "folderDelete") return;
-    const { target } = screen;
-    setScreen({ kind: "history" });
+    if (location.pathname !== "/folder-delete") return;
+    const { target } = location.state as { target: { id: number; name: string } };
+    nav.toHistory();
     deleteFolder(target.id, deleteItems)
       .then(() => loadFolders())
       .then(() => reloadHistory())
       .catch(console.error);
-  }, [screen, setScreen, deleteFolder, loadFolders, reloadHistory]);
+  }, [location, nav, deleteFolder, loadFolders, reloadHistory]);
 
   return {
     folderNameInputValue,

@@ -1,8 +1,24 @@
 import { renderHook, act } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { useFolderActions } from "@/hooks/useFolderActions";
-import { AppScreen } from "@/hooks/useAppState";
 import { Folder } from "@/types";
+
+const mockNav = {
+  toHistory: vi.fn(),
+  toPasteAs: vi.fn(),
+  toSeparatorPicker: vi.fn(),
+  toFolderNameInput: vi.fn(),
+  toFolderDelete: vi.fn(),
+  toFolderPicker: vi.fn(),
+};
+vi.mock("@/hooks/useAppNavigation", () => ({ useAppNavigation: () => mockNav }));
+
+let mockPathname = "/";
+let mockState: unknown = null;
+vi.mock("react-router-dom", () => ({
+  useLocation: () => ({ pathname: mockPathname, state: mockState }),
+  useNavigate: () => vi.fn(),
+}));
 
 function makeFolder(id = 1): Folder {
   return { id, name: "Test", created_at: 0, position: 0 };
@@ -10,8 +26,6 @@ function makeFolder(id = 1): Folder {
 
 function makeParams(overrides: Partial<Parameters<typeof useFolderActions>[0]> = {}) {
   return {
-    screen: { kind: "history" } as AppScreen,
-    setScreen: vi.fn(),
     createFolder: vi.fn().mockResolvedValue(makeFolder()),
     renameFolder: vi.fn().mockResolvedValue(undefined),
     deleteFolder: vi.fn().mockResolvedValue(undefined),
@@ -24,7 +38,11 @@ function makeParams(overrides: Partial<Parameters<typeof useFolderActions>[0]> =
 }
 
 describe("useFolderActions", () => {
-  beforeEach(() => vi.clearAllMocks());
+  beforeEach(() => {
+    vi.clearAllMocks();
+    mockPathname = "/";
+    mockState = null;
+  });
 
   describe("moveItemToFolder", () => {
     it("delegates to moveItemToFolder and reloads history", async () => {
@@ -47,40 +65,41 @@ describe("useFolderActions", () => {
   });
 
   describe("confirmFolderNameInput", () => {
-    it("does nothing when screen is not folderNameInput", () => {
-      const params = makeParams({ screen: { kind: "history" } });
+    it("does nothing when pathname is not /folder-name-input", () => {
+      mockPathname = "/";
+      const params = makeParams();
       const { result } = renderHook(() => useFolderActions(params));
       act(() => result.current.confirmFolderNameInput());
       expect(params.createFolder).not.toHaveBeenCalled();
     });
 
     it("does nothing when trimmed name is empty", () => {
-      const params = makeParams({
-        screen: { kind: "folderNameInput", mode: "create", targetId: null, pickerItemId: null },
-      });
+      mockPathname = "/folder-name-input";
+      mockState = { mode: "create", targetId: null, pickerItemId: null };
+      const params = makeParams();
       const { result } = renderHook(() => useFolderActions(params));
-      // folderNameInputValue starts as ""
       act(() => result.current.confirmFolderNameInput());
       expect(params.createFolder).not.toHaveBeenCalled();
     });
 
-    it("create mode: calls createFolder, loadFolders, reloadHistory", async () => {
-      const params = makeParams({
-        screen: { kind: "folderNameInput", mode: "create", targetId: null, pickerItemId: null },
-      });
+    it("create mode: calls createFolder, loadFolders, reloadHistory and navigates to history", async () => {
+      mockPathname = "/folder-name-input";
+      mockState = { mode: "create", targetId: null, pickerItemId: null };
+      const params = makeParams();
       const { result } = renderHook(() => useFolderActions(params));
       act(() => result.current.setFolderNameInputValue("Work"));
       await act(() => { result.current.confirmFolderNameInput(); });
       expect(params.createFolder).toHaveBeenCalledWith("Work");
       expect(params.loadFolders).toHaveBeenCalledOnce();
       expect(params.reloadHistory).toHaveBeenCalledOnce();
-      expect(params.setScreen).toHaveBeenCalledWith({ kind: "history" });
+      expect(mockNav.toHistory).toHaveBeenCalledOnce();
     });
 
     it("create mode with pickerItemId: calls moveItemToFolder after createFolder", async () => {
+      mockPathname = "/folder-name-input";
+      mockState = { mode: "create", targetId: null, pickerItemId: 7 };
       const newFolder = makeFolder(42);
       const params = makeParams({
-        screen: { kind: "folderNameInput", mode: "create", targetId: null, pickerItemId: 7 },
         createFolder: vi.fn().mockResolvedValue(newFolder),
       });
       const { result } = renderHook(() => useFolderActions(params));
@@ -90,9 +109,9 @@ describe("useFolderActions", () => {
     });
 
     it("rename mode: calls renameFolder with targetId", async () => {
-      const params = makeParams({
-        screen: { kind: "folderNameInput", mode: "rename", targetId: 3, pickerItemId: null },
-      });
+      mockPathname = "/folder-name-input";
+      mockState = { mode: "rename", targetId: 3, pickerItemId: null };
+      const params = makeParams();
       const { result } = renderHook(() => useFolderActions(params));
       act(() => result.current.setFolderNameInputValue("Renamed"));
       await act(() => { result.current.confirmFolderNameInput(); });
@@ -102,23 +121,24 @@ describe("useFolderActions", () => {
   });
 
   describe("confirmFolderDelete", () => {
-    it("does nothing when screen is not folderDelete", () => {
-      const params = makeParams({ screen: { kind: "history" } });
+    it("does nothing when pathname is not /folder-delete", () => {
+      mockPathname = "/";
+      const params = makeParams();
       const { result } = renderHook(() => useFolderActions(params));
       act(() => result.current.confirmFolderDelete(true));
       expect(params.deleteFolder).not.toHaveBeenCalled();
     });
 
     it("calls deleteFolder, loadFolders, reloadHistory and navigates to history", async () => {
-      const params = makeParams({
-        screen: { kind: "folderDelete", target: { id: 9, name: "Old" } },
-      });
+      mockPathname = "/folder-delete";
+      mockState = { target: { id: 9, name: "Old" } };
+      const params = makeParams();
       const { result } = renderHook(() => useFolderActions(params));
       await act(() => { result.current.confirmFolderDelete(false); });
       expect(params.deleteFolder).toHaveBeenCalledWith(9, false);
       expect(params.loadFolders).toHaveBeenCalledOnce();
       expect(params.reloadHistory).toHaveBeenCalledOnce();
-      expect(params.setScreen).toHaveBeenCalledWith({ kind: "history" });
+      expect(mockNav.toHistory).toHaveBeenCalledOnce();
     });
   });
 });

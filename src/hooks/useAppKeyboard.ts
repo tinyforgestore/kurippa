@@ -1,7 +1,7 @@
 import { useEffect, MutableRefObject } from "react";
+import { useLocation } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
-import { ListEntry } from "@/types";
-import { AppScreen } from "@/hooks/useAppState";
+import { useAppNavigation } from "@/hooks/useAppNavigation";
 
 interface MultiSelectHandle {
   active: boolean;
@@ -12,10 +12,8 @@ interface MultiSelectHandle {
 }
 
 interface UseAppKeyboardParams {
-  screen: AppScreen;
-  setScreen: (s: AppScreen) => void;
   multiSelect: MultiSelectHandle;
-  visibleEntries: ListEntry[];
+  visibleEntries: import("@/types").ListEntry[];
   selectedIndexRef: MutableRefObject<number>;
   inputActive: boolean;
   expandedFolderId: number | null;
@@ -27,8 +25,6 @@ interface UseAppKeyboardParams {
 }
 
 export function useAppKeyboard({
-  screen,
-  setScreen,
   multiSelect,
   visibleEntries,
   selectedIndexRef,
@@ -40,6 +36,9 @@ export function useAppKeyboard({
   isActivated,
   onTrialError,
 }: UseAppKeyboardParams) {
+  const location = useLocation();
+  const nav = useAppNavigation();
+
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.key === "," && (e.metaKey || e.ctrlKey)) {
@@ -47,11 +46,11 @@ export function useAppKeyboard({
         invoke("open_settings_window").catch(console.error);
       }
 
-      if ((e.metaKey || e.ctrlKey) && e.key === "n" && !inputActive && screen.kind !== "pasteAs" && !multiSelect.active) {
+      if ((e.metaKey || e.ctrlKey) && e.key === "n" && !inputActive && location.pathname !== "/paste-as" && !multiSelect.active) {
         e.preventDefault();
         if (!isActivated) { onTrialError?.("Folder organisation"); return; }
         setFolderNameInputValue("");
-        setScreen({ kind: "folderNameInput", mode: "create", targetId: null, pickerItemId: null });
+        nav.toFolderNameInput("create", null, null);
         return;
       }
 
@@ -60,7 +59,7 @@ export function useAppKeyboard({
         if (currentEntry?.kind === "folder-header") {
           e.preventDefault();
           setFolderNameInputValue(currentEntry.name);
-          setScreen({ kind: "folderNameInput", mode: "rename", targetId: currentEntry.folderId, pickerItemId: null });
+          nav.toFolderNameInput("rename", currentEntry.folderId, null);
           return;
         }
       }
@@ -70,7 +69,7 @@ export function useAppKeyboard({
         if (currentEntry?.kind === "item") {
           e.preventDefault();
           if (!isActivated) { onTrialError?.("Folder organisation"); return; }
-          setScreen({ kind: "folderPicker", itemId: currentEntry.result.item.id });
+          nav.toFolderPicker(currentEntry.result.item.id);
           return;
         }
       }
@@ -81,9 +80,9 @@ export function useAppKeyboard({
           exitFolderSection();
           return;
         }
-        if (screen.kind === "folderDelete" || screen.kind === "folderPicker") {
+        if (location.pathname === "/folder-delete" || location.pathname === "/folder-picker") {
           e.preventDefault();
-          setScreen({ kind: "history" });
+          nav.toHistory();
           return;
         }
       }
@@ -92,7 +91,7 @@ export function useAppKeyboard({
         e.preventDefault();
         if (multiSelect.active) {
           multiSelect.exitMode();
-          setScreen({ kind: "history" });
+          nav.toHistory();
         } else {
           if (!isActivated) { onTrialError?.("Multi-paste"); return; }
           const currentEntry = visibleEntries[selectedIndexRef.current];
@@ -103,7 +102,7 @@ export function useAppKeyboard({
         return;
       }
 
-      if (e.key === " " && multiSelect.active && screen.kind !== "separatorPicker") {
+      if (e.key === " " && multiSelect.active && location.pathname !== "/separator-picker") {
         e.preventDefault();
         const currentEntry = visibleEntries[selectedIndexRef.current];
         if (currentEntry && currentEntry.kind === "item") {
@@ -113,7 +112,7 @@ export function useAppKeyboard({
         return;
       }
 
-      if (e.key === "Enter" && multiSelect.active && screen.kind !== "separatorPicker") {
+      if (e.key === "Enter" && multiSelect.active && location.pathname !== "/separator-picker") {
         e.preventDefault();
         if (multiSelect.selections.length === 1) {
           const itemId = multiSelect.selections[0];
@@ -128,12 +127,12 @@ export function useAppKeyboard({
             dismiss();
           }
         } else if (multiSelect.selections.length >= 2) {
-          setScreen({ kind: "separatorPicker" });
+          nav.toSeparatorPicker();
         }
         return;
       }
 
-      if (e.key === "Escape" && multiSelect.active && screen.kind !== "separatorPicker") {
+      if (e.key === "Escape" && multiSelect.active && location.pathname !== "/separator-picker") {
         e.preventDefault();
         multiSelect.exitMode();
         return;
@@ -141,5 +140,5 @@ export function useAppKeyboard({
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [screen, setScreen, multiSelect, visibleEntries, selectedIndexRef, inputActive, expandedFolderId, exitFolderSection, setFolderNameInputValue, dismiss, isActivated, onTrialError]);
+  }, [location, nav, multiSelect, visibleEntries, selectedIndexRef, inputActive, expandedFolderId, exitFolderSection, setFolderNameInputValue, dismiss, isActivated, onTrialError]);
 }

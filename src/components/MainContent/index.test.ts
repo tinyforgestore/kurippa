@@ -1,8 +1,8 @@
 import { render, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { createElement, RefObject } from "react";
+import { MemoryRouter } from "react-router-dom";
 import { MainContent } from "@/components/MainContent/index";
-import { AppScreen } from "@/hooks/useAppState";
 import { ClipboardItem, Folder, ListEntry } from "@/types";
 
 // ---------------------------------------------------------------------------
@@ -97,8 +97,6 @@ function makeItem(id = 1): ClipboardItem {
 
 function makeProps(overrides: Partial<Parameters<typeof MainContent>[0]> = {}) {
   return {
-    screen: { kind: "history" } as AppScreen,
-    setScreen: vi.fn(),
     executePasteOption: vi.fn(),
     setPasteAsPreviewText: vi.fn(),
     openPreview: vi.fn(),
@@ -129,6 +127,16 @@ function makeProps(overrides: Partial<Parameters<typeof MainContent>[0]> = {}) {
   };
 }
 
+function renderAt(path: string, state: unknown, props: Parameters<typeof MainContent>[0]) {
+  return render(
+    createElement(
+      MemoryRouter,
+      { initialEntries: [{ pathname: path, state }] },
+      createElement(MainContent, props)
+    )
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Tests
 // ---------------------------------------------------------------------------
@@ -139,131 +147,137 @@ describe("MainContent", () => {
   });
 
   describe("screen routing", () => {
-    it("renders HistoryList for history screen", () => {
-      const { container } = render(createElement(MainContent, makeProps({ screen: { kind: "history" } })));
+    it("renders HistoryList for / route", () => {
+      const { container } = renderAt("/", null, makeProps());
       expect(container.querySelector("[data-screen='history']")).toBeInTheDocument();
     });
 
-    it("renders PasteAsMenu for pasteAs screen", () => {
-      const appScreen: AppScreen = { kind: "pasteAs", item: makeItem() };
-      const { container } = render(createElement(MainContent, makeProps({ screen: appScreen })));
+    it("renders PasteAsMenu for /paste-as route", () => {
+      const { container } = renderAt("/paste-as", { item: makeItem() }, makeProps());
       expect(container.querySelector("[data-screen='pasteAs']")).toBeInTheDocument();
     });
 
-    it("renders SeparatorPicker for separatorPicker screen", () => {
-      const appScreen: AppScreen = { kind: "separatorPicker" };
-      const { container } = render(createElement(MainContent, makeProps({ screen: appScreen })));
+    it("renders SeparatorPicker for /separator-picker route", () => {
+      const { container } = renderAt("/separator-picker", null, makeProps());
       expect(container.querySelector("[data-screen='separatorPicker']")).toBeInTheDocument();
     });
 
-    it("renders FolderNameInput for folderNameInput screen", () => {
-      const appScreen: AppScreen = { kind: "folderNameInput", mode: "create", targetId: null, pickerItemId: null };
-      const { container } = render(createElement(MainContent, makeProps({ screen: appScreen })));
+    it("renders FolderNameInput for /folder-name-input route", () => {
+      const { container } = renderAt(
+        "/folder-name-input",
+        { mode: "create", targetId: null, pickerItemId: null },
+        makeProps()
+      );
       expect(container.querySelector("[data-screen='folderNameInput']")).toBeInTheDocument();
     });
 
-    it("renders FolderDeleteConfirm for folderDelete screen", () => {
-      const appScreen: AppScreen = { kind: "folderDelete", target: { id: 1, name: "Work" } };
-      const { container } = render(createElement(MainContent, makeProps({ screen: appScreen })));
+    it("renders FolderDeleteConfirm for /folder-delete route", () => {
+      const { container } = renderAt(
+        "/folder-delete",
+        { target: { id: 1, name: "Work" } },
+        makeProps()
+      );
       expect(container.querySelector("[data-screen='folderDelete']")).toBeInTheDocument();
     });
 
-    it("renders FolderPicker for folderPicker screen", () => {
-      const appScreen: AppScreen = { kind: "folderPicker", itemId: 5 };
-      const { container } = render(createElement(MainContent, makeProps({ screen: appScreen })));
+    it("renders FolderPicker for /folder-picker route", () => {
+      const { container } = renderAt("/folder-picker", { itemId: 5 }, makeProps());
       expect(container.querySelector("[data-screen='folderPicker']")).toBeInTheDocument();
     });
   });
 
   describe("cancel / close callbacks navigate back to history", () => {
-    it("PasteAsMenu onClose calls setScreen({ kind: 'history' })", () => {
-      const setScreen = vi.fn();
-      const appScreen: AppScreen = { kind: "pasteAs", item: makeItem() };
-      const { container } = render(createElement(MainContent, makeProps({ screen: appScreen, setScreen })));
+    it("PasteAsMenu onClose navigates to /", () => {
+      const { container } = renderAt("/paste-as", { item: makeItem() }, makeProps());
       fireEvent.click(container.querySelector("[data-action='close']")!);
-      expect(setScreen).toHaveBeenCalledWith({ kind: "history" });
+      expect(container.querySelector("[data-screen='history']")).toBeInTheDocument();
     });
 
-    it("SeparatorPicker onCancel calls setScreen({ kind: 'history' })", () => {
-      const setScreen = vi.fn();
-      const appScreen: AppScreen = { kind: "separatorPicker" };
-      const { container } = render(createElement(MainContent, makeProps({ screen: appScreen, setScreen })));
+    it("SeparatorPicker onCancel navigates to /", () => {
+      const { container } = renderAt("/separator-picker", null, makeProps());
       fireEvent.click(container.querySelector("[data-action='cancel']")!);
-      expect(setScreen).toHaveBeenCalledWith({ kind: "history" });
+      expect(container.querySelector("[data-screen='history']")).toBeInTheDocument();
     });
 
-    it("FolderNameInput onCancel calls setScreen({ kind: 'history' })", () => {
-      const setScreen = vi.fn();
-      const appScreen: AppScreen = { kind: "folderNameInput", mode: "create", targetId: null, pickerItemId: null };
-      const { container } = render(createElement(MainContent, makeProps({ screen: appScreen, setScreen })));
+    it("FolderNameInput onCancel navigates to /", () => {
+      const { container } = renderAt(
+        "/folder-name-input",
+        { mode: "create", targetId: null, pickerItemId: null },
+        makeProps()
+      );
       fireEvent.click(container.querySelector("[data-action='cancel']")!);
-      expect(setScreen).toHaveBeenCalledWith({ kind: "history" });
+      expect(container.querySelector("[data-screen='history']")).toBeInTheDocument();
     });
 
-    it("FolderDeleteConfirm onCancel calls setScreen({ kind: 'history' })", () => {
-      const setScreen = vi.fn();
-      const appScreen: AppScreen = { kind: "folderDelete", target: { id: 1, name: "Work" } };
-      const { container } = render(createElement(MainContent, makeProps({ screen: appScreen, setScreen })));
+    it("FolderDeleteConfirm onCancel navigates to /", () => {
+      const { container } = renderAt(
+        "/folder-delete",
+        { target: { id: 1, name: "Work" } },
+        makeProps()
+      );
       fireEvent.click(container.querySelector("[data-action='cancel']")!);
-      expect(setScreen).toHaveBeenCalledWith({ kind: "history" });
+      expect(container.querySelector("[data-screen='history']")).toBeInTheDocument();
     });
 
-    it("FolderPicker onCancel calls setScreen({ kind: 'history' })", () => {
-      const setScreen = vi.fn();
-      const appScreen: AppScreen = { kind: "folderPicker", itemId: 5 };
-      const { container } = render(createElement(MainContent, makeProps({ screen: appScreen, setScreen })));
+    it("FolderPicker onCancel navigates to /", () => {
+      const { container } = renderAt("/folder-picker", { itemId: 5 }, makeProps());
       fireEvent.click(container.querySelector("[data-action='cancel']")!);
-      expect(setScreen).toHaveBeenCalledWith({ kind: "history" });
+      expect(container.querySelector("[data-screen='history']")).toBeInTheDocument();
     });
   });
 
   describe("FolderNameInput placeholder", () => {
     it("passes 'New folder name' when mode is create", () => {
-      const appScreen: AppScreen = { kind: "folderNameInput", mode: "create", targetId: null, pickerItemId: null };
-      const { container } = render(createElement(MainContent, makeProps({ screen: appScreen })));
+      const { container } = renderAt(
+        "/folder-name-input",
+        { mode: "create", targetId: null, pickerItemId: null },
+        makeProps()
+      );
       expect(container.querySelector("[data-placeholder]")?.textContent).toBe("New folder name");
     });
 
     it("passes 'Rename folder' when mode is rename", () => {
-      const appScreen: AppScreen = { kind: "folderNameInput", mode: "rename", targetId: 3, pickerItemId: null };
-      const { container } = render(createElement(MainContent, makeProps({ screen: appScreen })));
+      const { container } = renderAt(
+        "/folder-name-input",
+        { mode: "rename", targetId: 3, pickerItemId: null },
+        makeProps()
+      );
       expect(container.querySelector("[data-placeholder]")?.textContent).toBe("Rename folder");
     });
   });
 
   describe("FolderDeleteConfirm folder name", () => {
-    it("passes folder name from screen.target.name", () => {
-      const appScreen: AppScreen = { kind: "folderDelete", target: { id: 7, name: "Archive" } };
-      const { container } = render(createElement(MainContent, makeProps({ screen: appScreen })));
+    it("passes folder name from route state target.name", () => {
+      const { container } = renderAt(
+        "/folder-delete",
+        { target: { id: 7, name: "Archive" } },
+        makeProps()
+      );
       expect(container.querySelector("[data-folder-name]")?.textContent).toBe("Archive");
     });
   });
 
   describe("FolderPicker onCreateNewFolder", () => {
-    it("clears folder name input and transitions to folderNameInput with pickerItemId", () => {
-      const setScreen = vi.fn();
+    it("clears folder name input and transitions to /folder-name-input with pickerItemId", () => {
       const setFolderNameInputValue = vi.fn();
-      const appScreen: AppScreen = { kind: "folderPicker", itemId: 42 };
-      const { container } = render(
-        createElement(MainContent, makeProps({ screen: appScreen, setScreen, setFolderNameInputValue }))
+      const { container } = renderAt(
+        "/folder-picker",
+        { itemId: 42 },
+        makeProps({ setFolderNameInputValue })
       );
       fireEvent.click(container.querySelector("[data-action='create-folder']")!);
       expect(setFolderNameInputValue).toHaveBeenCalledWith("");
-      expect(setScreen).toHaveBeenCalledWith({
-        kind: "folderNameInput",
-        mode: "create",
-        targetId: null,
-        pickerItemId: 42,
-      });
+      expect(container.querySelector("[data-screen='folderNameInput']")).toBeInTheDocument();
     });
   });
 
   describe("FolderDeleteConfirm onConfirm", () => {
     it("calls confirmFolderDelete(true) when confirm is clicked", () => {
       const confirmFolderDelete = vi.fn();
-      const appScreen: AppScreen = { kind: "folderDelete", target: { id: 1, name: "Work" } };
-      const { container } = render(
-        createElement(MainContent, makeProps({ screen: appScreen, confirmFolderDelete }))
+      const { container } = renderAt(
+        "/folder-delete",
+        { target: { id: 1, name: "Work" } },
+        makeProps({ confirmFolderDelete })
       );
       fireEvent.click(container.querySelector("[data-action='confirm']")!);
       expect(confirmFolderDelete).toHaveBeenCalledWith(true);
@@ -271,32 +285,31 @@ describe("MainContent", () => {
   });
 
   describe("FolderPicker onSelectFolder and onRemoveFromFolder", () => {
-    it("onSelectFolder calls moveItemToFolder and navigates to history", () => {
-      const setScreen = vi.fn();
+    it("onSelectFolder calls moveItemToFolder and navigates to /", () => {
       const moveItemToFolder = vi.fn().mockResolvedValue(undefined);
-      const appScreen: AppScreen = { kind: "folderPicker", itemId: 7 };
-      const { container } = render(
-        createElement(MainContent, makeProps({ screen: appScreen, setScreen, moveItemToFolder }))
+      const { container } = renderAt(
+        "/folder-picker",
+        { itemId: 7 },
+        makeProps({ moveItemToFolder })
       );
       fireEvent.click(container.querySelector("[data-action='select-folder']")!);
       expect(moveItemToFolder).toHaveBeenCalledWith(7, 99);
-      expect(setScreen).toHaveBeenCalledWith({ kind: "history" });
+      expect(container.querySelector("[data-screen='history']")).toBeInTheDocument();
     });
 
-    it("onRemoveFromFolder calls removeItemFromFolder and navigates to history", () => {
-      const setScreen = vi.fn();
+    it("onRemoveFromFolder calls removeItemFromFolder and navigates to /", () => {
       const removeItemFromFolder = vi.fn().mockResolvedValue(undefined);
-      const appScreen: AppScreen = { kind: "folderPicker", itemId: 7 };
-      const { container } = render(
-        createElement(MainContent, makeProps({ screen: appScreen, setScreen, removeItemFromFolder }))
+      const { container } = renderAt(
+        "/folder-picker",
+        { itemId: 7 },
+        makeProps({ removeItemFromFolder })
       );
       fireEvent.click(container.querySelector("[data-action='remove-folder']")!);
       expect(removeItemFromFolder).toHaveBeenCalledWith(7);
-      expect(setScreen).toHaveBeenCalledWith({ kind: "history" });
+      expect(container.querySelector("[data-screen='history']")).toBeInTheDocument();
     });
 
-    it("currentFolderId is resolved from visibleEntries matching screen.itemId", () => {
-      const appScreen: AppScreen = { kind: "folderPicker", itemId: 3 };
+    it("currentFolderId is resolved from visibleEntries matching itemId in route state", () => {
       const entry: ListEntry = {
         kind: "item",
         result: {
@@ -320,9 +333,10 @@ describe("MainContent", () => {
           folder_name: null,
         },
       };
-      // just verify it renders without error when a matching entry exists
-      const { container } = render(
-        createElement(MainContent, makeProps({ screen: appScreen, visibleEntries: [entry] }))
+      const { container } = renderAt(
+        "/folder-picker",
+        { itemId: 3 },
+        makeProps({ visibleEntries: [entry] })
       );
       expect(container.querySelector("[data-screen='folderPicker']")).toBeInTheDocument();
     });

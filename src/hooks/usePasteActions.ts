@@ -1,25 +1,21 @@
 import { useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { PasteOption } from "@/utils/pasteAs";
-import { AppScreen } from "@/hooks/useAppState";
-
-interface MultiSelectHandle {
-  selections: number[];
-  exitMode: () => void;
-}
+import { useAppNavigation } from "@/hooks/useAppNavigation";
 
 interface UsePasteActionsParams {
-  setScreen: (s: AppScreen) => void;
-  multiSelect: MultiSelectHandle;
+  multiSelect: { selections: number[]; exitMode: () => void };
   dismiss: () => void;
   onTrialError?: (feature: string) => void;
 }
 
-export function usePasteActions({ setScreen, multiSelect, dismiss, onTrialError }: UsePasteActionsParams) {
+export function usePasteActions({ multiSelect, dismiss, onTrialError }: UsePasteActionsParams) {
+  const nav = useAppNavigation();
+
   const executePasteOption = useCallback((option: PasteOption) => {
     const { action } = option;
     if (!action) return;
-    setScreen({ kind: "history" });
+    nav.toHistory();
     if (action.kind === "paste-image") {
       invoke("paste_image_item", { imageFilename: action.imageFilename, itemId: action.itemId }).catch(console.error);
     } else {
@@ -29,7 +25,7 @@ export function usePasteActions({ setScreen, multiSelect, dismiss, onTrialError 
         itemId: action.itemId,
       }).catch(console.error);
     }
-  }, [setScreen]);
+  }, [nav]);
 
   const onMergePaste = useCallback((separator: string) => {
     invoke("merge_and_paste_items", {
@@ -38,7 +34,7 @@ export function usePasteActions({ setScreen, multiSelect, dismiss, onTrialError 
     })
       .then(() => {
         multiSelect.exitMode();
-        setScreen({ kind: "history" });
+        nav.toHistory();
         dismiss();
       })
       .catch((err: string) => {
@@ -48,7 +44,7 @@ export function usePasteActions({ setScreen, multiSelect, dismiss, onTrialError 
           console.error(err);
         }
       });
-  }, [multiSelect, setScreen, dismiss, onTrialError]);
+  }, [multiSelect, nav, dismiss, onTrialError]);
 
   return { executePasteOption, onMergePaste };
 }

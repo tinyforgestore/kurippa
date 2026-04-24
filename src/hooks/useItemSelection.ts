@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
+import { useAtomValue, useSetAtom } from "jotai";
 import { invoke } from "@tauri-apps/api/core";
 import { ClipboardItem, ListEntry } from "@/types";
 
@@ -7,6 +8,8 @@ type ItemEntry = Extract<ListEntry, { kind: "item" }>;
 import { itemDisplayLabel } from "@/utils/format";
 import { info } from "@tauri-apps/plugin-log";
 import { useDeleteAnimation } from "@/hooks/useDeleteAnimation";
+import { queryAtom, selectedIndexAtom } from "@/atoms/navigation";
+import { visibleEntriesAtom } from "@/atoms/derived";
 
 interface KeyCommand {
   key: string;
@@ -35,9 +38,9 @@ interface UseItemSelectionOptions {
 }
 
 export function useItemSelection(
-  visibleEntries: ListEntry[],
+  visibleEntriesParam: ListEntry[] | undefined,
   dismiss: () => void,
-  query: string,
+  queryParam: string | undefined,
   options: UseItemSelectionOptions
 ) {
   const {
@@ -57,7 +60,13 @@ export function useItemSelection(
     navigationEnabled = true,
   } = options;
 
-  const [selectedIndex, setSelectedIndex] = useState(0);
+  const atomVisibleEntries = useAtomValue(visibleEntriesAtom);
+  const atomQuery = useAtomValue(queryAtom);
+  const visibleEntries = visibleEntriesParam ?? atomVisibleEntries;
+  const query = queryParam ?? atomQuery;
+
+  const selectedIndex = useAtomValue(selectedIndexAtom);
+  const setSelectedIndex = useSetAtom(selectedIndexAtom);
   const listRef = useRef<HTMLDivElement>(null);
   const visibleEntriesLengthRef = useRef(visibleEntries.length);
   // eslint-disable-next-line react-hooks/refs
@@ -66,7 +75,6 @@ export function useItemSelection(
   const getEntriesLength = useCallback(() => visibleEntriesLengthRef.current, []);
   const { deletingId, triggerDelete } = useDeleteAnimation(onDelete, setSelectedIndex, getEntriesLength);
 
-  // Reset selection whenever the query changes.
   useEffect(() => {
     setSelectedIndex(0);
   }, [query]);
@@ -95,7 +103,6 @@ export function useItemSelection(
   const currentEntry = visibleEntries[selectedIndex];
 
   const commands = useMemo((): KeyCommand[] => [
-    // Navigation
     { key: "ArrowDown", guard: () => navigationEnabled,
       action: () => setSelectedIndex((i) => Math.min(i + 1, visibleEntries.length - 1)) },
     { key: "ArrowUp", guard: () => navigationEnabled,
@@ -109,7 +116,6 @@ export function useItemSelection(
     { key: "ArrowLeft", guard: () => navigationEnabled && expandedFolderId != null,
       action: () => { onExitFolderSection?.(); setSelectedIndex(0); } },
 
-    // Actions (require enabled)
     { key: "Escape", guard: () => enabled,
       action: () => dismiss() },
     { key: "Enter", guard: () => enabled && currentEntry?.kind === "pinned-header",
@@ -125,7 +131,6 @@ export function useItemSelection(
     { key: "ArrowLeft", guard: () => enabled && currentEntry?.kind === "item",
       action: () => onClosePreview() },
 
-    // Meta combos
     { key: "p", meta: true, guard: () => enabled && currentEntry?.kind === "item",
       action: () => { info("Pin toggle key pressed, attempting to toggle pin on item"); onPinToggle((currentEntry as ItemEntry).result.item.id); } },
     { key: "Backspace", meta: true, guard: () => enabled && currentEntry?.kind === "folder-header",
@@ -185,7 +190,6 @@ export function useItemSelection(
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [commands]);
 
-  // Quick-paste: ⌘0–9 / Ctrl+0–9 — kept separate because it matches a key range, not a fixed key.
   useEffect(() => {
     if (!enabled) return;
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -202,7 +206,6 @@ export function useItemSelection(
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [enabled, visibleEntries, pasteEntry, onEnterSection, onEnterFolderSection]);
 
-  // Scroll the selected item into view.
   useEffect(() => {
     if (listRef.current) {
       const items = listRef.current.querySelectorAll<HTMLElement>(

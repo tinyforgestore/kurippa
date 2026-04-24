@@ -33,7 +33,7 @@ vi.mock("@/hooks/useAppState", () => ({
     query: "", setQuery: vi.fn(), inputRef: { current: null }, dismiss: vi.fn(),
     visibleEntries: [], selectedIndex: 0, setSelectedIndex: vi.fn(), listRef: { current: null },
     onClickItem: vi.fn(), enterPinnedSection: vi.fn(), liftingId: null, landingId: null, deletingId: null,
-    screen: { kind: "history" }, setScreen: vi.fn(), executePasteOption: vi.fn(),
+    executePasteOption: vi.fn(),
     setPasteAsPreviewText: vi.fn(), openPreview: vi.fn(), isPreviewOpen: false,
     selectedItem: null, pasteAsPreviewText: null,
     clearConfirm: { show: false, onRequest: vi.fn(), onConfirm: vi.fn(), onCancel: vi.fn() },

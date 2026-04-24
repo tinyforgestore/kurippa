@@ -1,9 +1,12 @@
 import { renderHook, act } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { createElement } from "react";
+import { Provider, createStore } from "jotai";
 import { useClipboardHistory } from "@/hooks/useClipboardHistory";
 import { ClipboardItem, HISTORY_DISPLAY_LIMIT, Folder } from "@/types";
+import { foldersAtom } from "@/atoms/folders";
+import { queryAtom } from "@/atoms/navigation";
 
-// Mock Tauri event API (listen) — captures the callback so tests can fire it
 type ClipboardUpdatedCb = (event: { payload: ReturnType<typeof makeItem> }) => void;
 type HistoryClearedCb = () => void;
 
@@ -26,7 +29,6 @@ vi.mock("@tauri-apps/api/event", () => ({
   }),
 }));
 
-// Mock Tauri invoke
 vi.mock("@tauri-apps/api/core", () => ({
   invoke: vi.fn(),
 }));
@@ -61,7 +63,6 @@ describe("useClipboardHistory", () => {
     capturedClipboardUpdated = null;
     capturedHistoryCleared = null;
     mockInvoke.mockReset();
-    // Default: get_history returns two items; search_history returns empty
     mockInvoke.mockImplementation((cmd: string) => {
       if (cmd === "get_history") {
         return Promise.resolve([makeItem(1, false), makeItem(2, true)]);
@@ -70,8 +71,6 @@ describe("useClipboardHistory", () => {
     });
   });
 
-  // Helper: render the hook and wait for initial load to settle.
-  // Pass `items` to override the default two-item get_history mock.
   async function setup(query = "", folders: Folder[] = [], items?: ClipboardItem[]) {
     if (items !== undefined) {
       mockInvoke.mockImplementation((cmd: string) => {
@@ -79,8 +78,12 @@ describe("useClipboardHistory", () => {
         return Promise.resolve(undefined);
       });
     }
-    const hook = renderHook(() => useClipboardHistory(query, folders));
-    // Flush the get_history promise
+    const store = createStore();
+    store.set(queryAtom, query);
+    store.set(foldersAtom, folders);
+    const wrapper = ({ children }: { children: React.ReactNode }) =>
+      createElement(Provider, { store }, children);
+    const hook = renderHook(() => useClipboardHistory(), { wrapper });
     await act(async () => {});
     return hook;
   }
@@ -95,7 +98,6 @@ describe("useClipboardHistory", () => {
 
     it("sets highlighted to null after allItems changes with empty query", async () => {
       const { result } = await setup("");
-      // Trigger an unpin to cause allItems to change, still with empty query
       mockInvoke.mockImplementation((cmd: string) => {
         if (cmd === "get_history") return Promise.resolve([makeItem(2, true)]);
         return Promise.resolve(undefined);
@@ -157,7 +159,6 @@ describe("useClipboardHistory", () => {
   describe("togglePinItem — unknown id", () => {
     it("returns early with no invoke called for the toggle", async () => {
       const { result } = await setup();
-      // Clear the calls made during initial load
       mockInvoke.mockClear();
 
       act(() => {
@@ -253,10 +254,8 @@ describe("useClipboardHistory", () => {
         await Promise.resolve();
       });
 
-      // item 2 should now be at the top; item 1 remains but is no longer first
       const ids = result.current.results.map((r) => r.item.id);
       expect(ids[0]).toBe(2);
-      // No duplicate: id 2 appears exactly once
       expect(ids.filter((id) => id === 2)).toHaveLength(1);
     });
 
@@ -442,8 +441,6 @@ describe("useClipboardHistory", () => {
     });
 
     it("sets highlighted to null when the match is on folder name only (not item text)", async () => {
-      // "WorkStuff" does not match "hello world" or "unrelated content" as text,
-      // but matches the folder name for item 1
       const { result } = await setup("WorkStuff", [folder]);
       const r = result.current.results.find((r) => r.item.id === 1);
       expect(r).toBeDefined();
@@ -451,7 +448,6 @@ describe("useClipboardHistory", () => {
     });
 
     it("sets highlighted to non-null when query matches item text (text match takes priority over folder name)", async () => {
-      // "hello" matches item 1's text directly
       const { result } = await setup("hello", [folder]);
       const r = result.current.results.find((r) => r.item.id === 1);
       expect(r).toBeDefined();

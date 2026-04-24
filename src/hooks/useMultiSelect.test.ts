@@ -1,6 +1,13 @@
 import { renderHook, act } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { createElement } from "react";
+import { createStore, Provider } from "jotai";
 import { useMultiSelect } from "@/hooks/useMultiSelect";
+
+function makeWrapper() {
+  const store = createStore();
+  return { wrapper: ({ children }: { children: React.ReactNode }) => createElement(Provider, { store }, children) };
+}
 
 describe("useMultiSelect", () => {
   beforeEach(() => {
@@ -13,7 +20,7 @@ describe("useMultiSelect", () => {
 
   describe("initial state", () => {
     it("starts inactive with empty selections", () => {
-      const { result } = renderHook(() => useMultiSelect());
+      const { result } = renderHook(() => useMultiSelect(), makeWrapper());
       expect(result.current.active).toBe(false);
       expect(result.current.selections).toEqual([]);
       expect(result.current.flashingId).toBeNull();
@@ -23,7 +30,7 @@ describe("useMultiSelect", () => {
 
   describe("enterMode", () => {
     it("sets active to true and seeds selections with the initial item id", () => {
-      const { result } = renderHook(() => useMultiSelect());
+      const { result } = renderHook(() => useMultiSelect(), makeWrapper());
       act(() => {
         result.current.enterMode(42);
       });
@@ -32,7 +39,7 @@ describe("useMultiSelect", () => {
     });
 
     it("resets any prior flash/toast state", () => {
-      const { result } = renderHook(() => useMultiSelect());
+      const { result } = renderHook(() => useMultiSelect(), makeWrapper());
       // Trigger max toast first
       act(() => {
         result.current.enterMode(1);
@@ -57,7 +64,7 @@ describe("useMultiSelect", () => {
 
   describe("exitMode", () => {
     it("sets active to false and clears selections", () => {
-      const { result } = renderHook(() => useMultiSelect());
+      const { result } = renderHook(() => useMultiSelect(), makeWrapper());
       act(() => {
         result.current.enterMode(42);
       });
@@ -69,7 +76,7 @@ describe("useMultiSelect", () => {
     });
 
     it("clears flash and toast state on exit", () => {
-      const { result } = renderHook(() => useMultiSelect());
+      const { result } = renderHook(() => useMultiSelect(), makeWrapper());
       act(() => {
         result.current.enterMode(1);
         result.current.toggleSelection(2, true);
@@ -91,7 +98,7 @@ describe("useMultiSelect", () => {
 
   describe("toggleSelection", () => {
     it("does nothing when isSelectable is false", () => {
-      const { result } = renderHook(() => useMultiSelect());
+      const { result } = renderHook(() => useMultiSelect(), makeWrapper());
       act(() => {
         result.current.enterMode(1);
       });
@@ -102,7 +109,7 @@ describe("useMultiSelect", () => {
     });
 
     it("adds an item to selections when it is not yet selected", () => {
-      const { result } = renderHook(() => useMultiSelect());
+      const { result } = renderHook(() => useMultiSelect(), makeWrapper());
       act(() => {
         result.current.enterMode(1);
       });
@@ -113,7 +120,7 @@ describe("useMultiSelect", () => {
     });
 
     it("removes an item from selections when it is already selected", () => {
-      const { result } = renderHook(() => useMultiSelect());
+      const { result } = renderHook(() => useMultiSelect(), makeWrapper());
       act(() => {
         result.current.enterMode(1);
       });
@@ -128,7 +135,7 @@ describe("useMultiSelect", () => {
     });
 
     it("preserves selection order (append to end)", () => {
-      const { result } = renderHook(() => useMultiSelect());
+      const { result } = renderHook(() => useMultiSelect(), makeWrapper());
       act(() => {
         result.current.enterMode(10);
       });
@@ -141,7 +148,7 @@ describe("useMultiSelect", () => {
 
     describe("max-5 enforcement", () => {
       it("does not allow a 6th selection", () => {
-        const { result } = renderHook(() => useMultiSelect());
+        const { result } = renderHook(() => useMultiSelect(), makeWrapper());
         act(() => {
           result.current.enterMode(1);
           result.current.toggleSelection(2, true);
@@ -158,7 +165,7 @@ describe("useMultiSelect", () => {
       });
 
       it("sets flashingId to the 6th item and clears it after 150ms", () => {
-        const { result } = renderHook(() => useMultiSelect());
+        const { result } = renderHook(() => useMultiSelect(), makeWrapper());
         act(() => {
           result.current.enterMode(1);
           result.current.toggleSelection(2, true);
@@ -177,7 +184,7 @@ describe("useMultiSelect", () => {
       });
 
       it("shows maxToastVisible for 1500ms then hides it", () => {
-        const { result } = renderHook(() => useMultiSelect());
+        const { result } = renderHook(() => useMultiSelect(), makeWrapper());
         act(() => {
           result.current.enterMode(1);
           result.current.toggleSelection(2, true);
@@ -200,7 +207,7 @@ describe("useMultiSelect", () => {
       });
 
       it("allows adding after deselecting to go below 5", () => {
-        const { result } = renderHook(() => useMultiSelect());
+        const { result } = renderHook(() => useMultiSelect(), makeWrapper());
         act(() => {
           result.current.enterMode(1);
           result.current.toggleSelection(2, true);
