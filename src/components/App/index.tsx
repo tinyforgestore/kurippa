@@ -1,5 +1,4 @@
 import { useLocation } from "react-router-dom";
-import { useAtomValue } from "jotai";
 import { useApp } from "@/hooks/useApp";
 import { Topbar } from "@/components/Topbar";
 import { MainContent } from "@/components/MainContent";
@@ -10,7 +9,7 @@ import { UpdateBanner } from "@/components/UpdateBanner";
 import { UpgradeBanner } from "@/components/UpgradeBanner";
 import { PermissionsDialog } from "@/components/PermissionsDialog";
 import { container, inlineToast, inlineToastGreen, mainColumn, reactivateBtn } from "@/components/App/index.css";
-import { foldersAtom, maxFoldersToastAtom } from "@/atoms/folders";
+import { useFoldersStore } from "@/store";
 
 function App() {
   const location = useLocation();
@@ -60,8 +59,7 @@ function App() {
     dismissUpdate,
   } = useApp();
 
-  const folders = useAtomValue(foldersAtom);
-  const maxFoldersToast = useAtomValue(maxFoldersToastAtom);
+  const { folders, maxFoldersToast } = useFoldersStore();
 
   if (mode === "first_launch") {
     return null;

@@ -1,5 +1,8 @@
 import { renderHook, act } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { createElement } from "react";
+import { Provider, createStore } from "jotai";
+import { StoreProvider } from "@/store";
 import { useFolders } from "@/hooks/useFolders";
 import { Folder } from "@/types";
 
@@ -8,6 +11,11 @@ vi.mock("@tauri-apps/api/core", () => ({ invoke: (...args: unknown[]) => mockInv
 
 function makeFolder(id: number, name = `Folder ${id}`): Folder {
   return { id, name, created_at: 0, position: id };
+}
+
+function makeWrapper() {
+  const store = createStore();
+  return { wrapper: ({ children }: { children: React.ReactNode }) => createElement(Provider, { store }, createElement(StoreProvider, null, children)) };
 }
 
 describe("useFolders", () => {
@@ -25,7 +33,8 @@ describe("useFolders", () => {
     it("invokes get_folders and populates the folders list", async () => {
       const folders = [makeFolder(1), makeFolder(2)];
       mockInvoke.mockResolvedValueOnce(folders);
-      const { result } = renderHook(() => useFolders());
+      const { wrapper } = makeWrapper();
+      const { result } = renderHook(() => useFolders(), { wrapper });
       await act(async () => {});
       expect(mockInvoke).toHaveBeenCalledWith("get_folders");
       expect(result.current.folders).toHaveLength(2);
@@ -38,7 +47,8 @@ describe("useFolders", () => {
       const newFolder = makeFolder(10, "Work");
       mockInvoke.mockResolvedValueOnce(newFolder); // create_folder
 
-      const { result } = renderHook(() => useFolders());
+      const { wrapper } = makeWrapper();
+      const { result } = renderHook(() => useFolders(), { wrapper });
       await act(async () => {});
 
       let returned: Folder | undefined;
@@ -56,7 +66,8 @@ describe("useFolders", () => {
       mockInvoke.mockResolvedValueOnce([]); // initial loadFolders
       mockInvoke.mockRejectedValueOnce("max_folders_reached");
 
-      const { result } = renderHook(() => useFolders());
+      const { wrapper } = makeWrapper();
+      const { result } = renderHook(() => useFolders(), { wrapper });
       await act(async () => {});
 
       await act(async () => {
@@ -74,7 +85,8 @@ describe("useFolders", () => {
       mockInvoke.mockResolvedValueOnce([]); // initial loadFolders
       mockInvoke.mockRejectedValueOnce("max_folders_reached");
 
-      const { result } = renderHook(() => useFolders());
+      const { wrapper } = makeWrapper();
+      const { result } = renderHook(() => useFolders(), { wrapper });
       await act(async () => {});
 
       await expect(
@@ -88,7 +100,8 @@ describe("useFolders", () => {
       mockInvoke.mockResolvedValueOnce([makeFolder(1, "Old")]); // loadFolders
       mockInvoke.mockResolvedValueOnce(undefined); // rename_folder
 
-      const { result } = renderHook(() => useFolders());
+      const { wrapper } = makeWrapper();
+      const { result } = renderHook(() => useFolders(), { wrapper });
       await act(async () => {});
 
       await act(async () => {
@@ -105,7 +118,8 @@ describe("useFolders", () => {
       mockInvoke.mockResolvedValueOnce([makeFolder(1), makeFolder(2)]); // loadFolders
       mockInvoke.mockResolvedValueOnce(undefined); // delete_folder
 
-      const { result } = renderHook(() => useFolders());
+      const { wrapper } = makeWrapper();
+      const { result } = renderHook(() => useFolders(), { wrapper });
       await act(async () => {});
       expect(result.current.folders).toHaveLength(2);
 
@@ -122,7 +136,8 @@ describe("useFolders", () => {
   describe("moveItemToFolder", () => {
     it("invokes move_item_to_folder with correct args", async () => {
       mockInvoke.mockResolvedValueOnce([]); // loadFolders
-      const { result } = renderHook(() => useFolders());
+      const { wrapper } = makeWrapper();
+      const { result } = renderHook(() => useFolders(), { wrapper });
       await act(async () => {});
 
       await act(async () => {
@@ -136,7 +151,8 @@ describe("useFolders", () => {
   describe("removeItemFromFolder", () => {
     it("invokes remove_item_from_folder with correct args", async () => {
       mockInvoke.mockResolvedValueOnce([]); // loadFolders
-      const { result } = renderHook(() => useFolders());
+      const { wrapper } = makeWrapper();
+      const { result } = renderHook(() => useFolders(), { wrapper });
       await act(async () => {});
 
       await act(async () => {
@@ -157,7 +173,8 @@ describe("useFolders", () => {
       mockInvoke.mockRejectedValueOnce("trial");
 
       const onTrialError = vi.fn();
-      const { result } = renderHook(() => useFolders({ onTrialError }));
+      const { wrapper } = makeWrapper();
+      const { result } = renderHook(() => useFolders({ onTrialError }), { wrapper });
       await act(async () => {});
 
       await expect(
@@ -174,7 +191,8 @@ describe("useFolders", () => {
       mockInvoke.mockRejectedValueOnce("trial");
 
       const onTrialError = vi.fn();
-      const { result } = renderHook(() => useFolders({ onTrialError }));
+      const { wrapper } = makeWrapper();
+      const { result } = renderHook(() => useFolders({ onTrialError }), { wrapper });
       await act(async () => {});
 
       await act(async () => {
@@ -189,7 +207,8 @@ describe("useFolders", () => {
       mockInvoke.mockRejectedValueOnce("some_other_error");
 
       const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-      const { result } = renderHook(() => useFolders());
+      const { wrapper } = makeWrapper();
+      const { result } = renderHook(() => useFolders(), { wrapper });
       await act(async () => {});
 
       await act(async () => {
@@ -207,7 +226,8 @@ describe("useFolders", () => {
       mockInvoke.mockRejectedValueOnce("trial");
 
       const onTrialError = vi.fn();
-      const { result } = renderHook(() => useFolders({ onTrialError }));
+      const { wrapper } = makeWrapper();
+      const { result } = renderHook(() => useFolders({ onTrialError }), { wrapper });
       await act(async () => {});
 
       await act(async () => {
@@ -222,7 +242,8 @@ describe("useFolders", () => {
       mockInvoke.mockRejectedValueOnce("some_other_error");
 
       const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
-      const { result } = renderHook(() => useFolders());
+      const { wrapper } = makeWrapper();
+      const { result } = renderHook(() => useFolders(), { wrapper });
       await act(async () => {});
 
       await act(async () => {

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef } from "react";
-import { useAtomValue, useSetAtom } from "jotai";
+import { useSetAtom } from "jotai";
 import { invoke } from "@tauri-apps/api/core";
 import { ClipboardItem, ListEntry } from "@/types";
 
@@ -8,8 +8,8 @@ type ItemEntry = Extract<ListEntry, { kind: "item" }>;
 import { itemDisplayLabel } from "@/utils/format";
 import { info } from "@tauri-apps/plugin-log";
 import { useDeleteAnimation } from "@/hooks/useDeleteAnimation";
-import { queryAtom, selectedIndexAtom } from "@/atoms/navigation";
-import { visibleEntriesAtom } from "@/atoms/derived";
+import { selectedIndexAtom } from "@/atoms/navigation";
+import { useClipboardStore, useNavigationStore } from "@/store";
 
 interface KeyCommand {
   key: string;
@@ -60,12 +60,12 @@ export function useItemSelection(
     navigationEnabled = true,
   } = options;
 
-  const atomVisibleEntries = useAtomValue(visibleEntriesAtom);
-  const atomQuery = useAtomValue(queryAtom);
+  const { visibleEntries: atomVisibleEntries } = useClipboardStore();
+  const { query: atomQuery, selectedIndex: atomSelectedIndex } = useNavigationStore();
   const visibleEntries = visibleEntriesParam ?? atomVisibleEntries;
   const query = queryParam ?? atomQuery;
 
-  const selectedIndex = useAtomValue(selectedIndexAtom);
+  const selectedIndex = atomSelectedIndex;
   const setSelectedIndex = useSetAtom(selectedIndexAtom);
   const listRef = useRef<HTMLDivElement>(null);
   const visibleEntriesLengthRef = useRef(visibleEntries.length);

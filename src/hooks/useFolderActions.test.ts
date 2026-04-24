@@ -1,5 +1,8 @@
 import { renderHook, act } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { createElement } from "react";
+import { Provider, createStore } from "jotai";
+import { StoreProvider } from "@/store";
 import { useFolderActions } from "@/hooks/useFolderActions";
 import { Folder } from "@/types";
 
@@ -22,6 +25,11 @@ vi.mock("react-router-dom", () => ({
 
 function makeFolder(id = 1): Folder {
   return { id, name: "Test", created_at: 0, position: 0 };
+}
+
+function makeWrapper() {
+  const store = createStore();
+  return { wrapper: ({ children }: { children: React.ReactNode }) => createElement(Provider, { store }, createElement(StoreProvider, null, children)) };
 }
 
 function makeParams(overrides: Partial<Parameters<typeof useFolderActions>[0]> = {}) {
@@ -47,7 +55,8 @@ describe("useFolderActions", () => {
   describe("moveItemToFolder", () => {
     it("delegates to moveItemToFolder and reloads history", async () => {
       const params = makeParams();
-      const { result } = renderHook(() => useFolderActions(params));
+      const { wrapper } = makeWrapper();
+      const { result } = renderHook(() => useFolderActions(params), { wrapper });
       await act(() => result.current.moveItemToFolder(1, 2));
       expect(params.moveItemToFolder).toHaveBeenCalledWith(1, 2);
       expect(params.reloadHistory).toHaveBeenCalledOnce();
@@ -57,7 +66,8 @@ describe("useFolderActions", () => {
   describe("removeItemFromFolder", () => {
     it("delegates to removeItemFromFolder and reloads history", async () => {
       const params = makeParams();
-      const { result } = renderHook(() => useFolderActions(params));
+      const { wrapper } = makeWrapper();
+      const { result } = renderHook(() => useFolderActions(params), { wrapper });
       await act(() => result.current.removeItemFromFolder(5));
       expect(params.removeItemFromFolder).toHaveBeenCalledWith(5);
       expect(params.reloadHistory).toHaveBeenCalledOnce();
@@ -68,7 +78,8 @@ describe("useFolderActions", () => {
     it("does nothing when pathname is not /folder-name-input", () => {
       mockPathname = "/";
       const params = makeParams();
-      const { result } = renderHook(() => useFolderActions(params));
+      const { wrapper } = makeWrapper();
+      const { result } = renderHook(() => useFolderActions(params), { wrapper });
       act(() => result.current.confirmFolderNameInput());
       expect(params.createFolder).not.toHaveBeenCalled();
     });
@@ -77,7 +88,8 @@ describe("useFolderActions", () => {
       mockPathname = "/folder-name-input";
       mockState = { mode: "create", targetId: null, pickerItemId: null };
       const params = makeParams();
-      const { result } = renderHook(() => useFolderActions(params));
+      const { wrapper } = makeWrapper();
+      const { result } = renderHook(() => useFolderActions(params), { wrapper });
       act(() => result.current.confirmFolderNameInput());
       expect(params.createFolder).not.toHaveBeenCalled();
     });
@@ -86,7 +98,8 @@ describe("useFolderActions", () => {
       mockPathname = "/folder-name-input";
       mockState = { mode: "create", targetId: null, pickerItemId: null };
       const params = makeParams();
-      const { result } = renderHook(() => useFolderActions(params));
+      const { wrapper } = makeWrapper();
+      const { result } = renderHook(() => useFolderActions(params), { wrapper });
       act(() => result.current.setFolderNameInputValue("Work"));
       await act(() => { result.current.confirmFolderNameInput(); });
       expect(params.createFolder).toHaveBeenCalledWith("Work");
@@ -102,7 +115,8 @@ describe("useFolderActions", () => {
       const params = makeParams({
         createFolder: vi.fn().mockResolvedValue(newFolder),
       });
-      const { result } = renderHook(() => useFolderActions(params));
+      const { wrapper } = makeWrapper();
+      const { result } = renderHook(() => useFolderActions(params), { wrapper });
       act(() => result.current.setFolderNameInputValue("Work"));
       await act(() => { result.current.confirmFolderNameInput(); });
       expect(params.moveItemToFolder).toHaveBeenCalledWith(7, 42);
@@ -112,7 +126,8 @@ describe("useFolderActions", () => {
       mockPathname = "/folder-name-input";
       mockState = { mode: "rename", targetId: 3, pickerItemId: null };
       const params = makeParams();
-      const { result } = renderHook(() => useFolderActions(params));
+      const { wrapper } = makeWrapper();
+      const { result } = renderHook(() => useFolderActions(params), { wrapper });
       act(() => result.current.setFolderNameInputValue("Renamed"));
       await act(() => { result.current.confirmFolderNameInput(); });
       expect(params.renameFolder).toHaveBeenCalledWith(3, "Renamed");
@@ -124,7 +139,8 @@ describe("useFolderActions", () => {
     it("does nothing when pathname is not /folder-delete", () => {
       mockPathname = "/";
       const params = makeParams();
-      const { result } = renderHook(() => useFolderActions(params));
+      const { wrapper } = makeWrapper();
+      const { result } = renderHook(() => useFolderActions(params), { wrapper });
       act(() => result.current.confirmFolderDelete(true));
       expect(params.deleteFolder).not.toHaveBeenCalled();
     });
@@ -133,7 +149,8 @@ describe("useFolderActions", () => {
       mockPathname = "/folder-delete";
       mockState = { target: { id: 9, name: "Old" } };
       const params = makeParams();
-      const { result } = renderHook(() => useFolderActions(params));
+      const { wrapper } = makeWrapper();
+      const { result } = renderHook(() => useFolderActions(params), { wrapper });
       await act(() => { result.current.confirmFolderDelete(false); });
       expect(params.deleteFolder).toHaveBeenCalledWith(9, false);
       expect(params.loadFolders).toHaveBeenCalledOnce();

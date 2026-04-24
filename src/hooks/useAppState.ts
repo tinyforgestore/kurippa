@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef } from "react";
-import { useAtomValue, useSetAtom } from "jotai";
+import { useSetAtom } from "jotai";
 import { useLocation } from "react-router-dom";
 import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
@@ -19,8 +19,8 @@ import { useAppKeyboard } from "@/hooks/useAppKeyboard";
 import { useAppNavigation } from "@/hooks/useAppNavigation";
 import { ClipboardItem } from "@/types";
 import { updateInfoAtom, pasteAsPreviewTextAtom } from "@/atoms/ui";
-import { queryAtom, selectedIndexAtom } from "@/atoms/navigation";
-import { visibleEntriesAtom, inPinnedSectionAtom, expandedFolderIdAtom } from "@/atoms/derived";
+import { selectedIndexAtom } from "@/atoms/navigation";
+import { useClipboardStore, useNavigationStore, useUIStore } from "@/store";
 
 export type AppScreen =
   | { kind: "history" }
@@ -40,16 +40,12 @@ export function useAppState({ onTrialError, isActivated = false }: UseAppStatePa
   const nav = useAppNavigation();
   const resetSelectionRef = useRef<() => void>(() => {});
 
-  const updateInfo = useAtomValue(updateInfoAtom);
+  const { updateInfo, pasteAsPreviewText } = useUIStore();
+  const { query, selectedIndex, inPinnedSection, expandedFolderId } = useNavigationStore();
+  const { visibleEntries } = useClipboardStore();
   const setUpdateInfo = useSetAtom(updateInfoAtom);
   const setPasteAsPreviewText = useSetAtom(pasteAsPreviewTextAtom);
-  const pasteAsPreviewText = useAtomValue(pasteAsPreviewTextAtom);
-  const query = useAtomValue(queryAtom);
-  const selectedIndex = useAtomValue(selectedIndexAtom);
   const setSelectedIndex = useSetAtom(selectedIndexAtom);
-  const visibleEntries = useAtomValue(visibleEntriesAtom);
-  const inPinnedSection = useAtomValue(inPinnedSectionAtom);
-  const expandedFolderId = useAtomValue(expandedFolderIdAtom);
 
   const folderNameInputValueSetterRef = useRef<(v: string) => void>(() => {});
   const cancelClearConfirmRef = useRef<() => void>(() => {});

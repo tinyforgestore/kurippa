@@ -1,9 +1,10 @@
 import { useCallback } from "react";
-import { useAtomValue, useSetAtom } from "jotai";
+import { useSetAtom } from "jotai";
 import { useLocation } from "react-router-dom";
 import { useAppNavigation } from "@/hooks/useAppNavigation";
 import { Folder } from "@/types";
 import { folderNameInputValueAtom } from "@/atoms/folders";
+import { useFoldersStore } from "@/store";
 
 interface UseFolderActionsParams {
   createFolder: (name: string) => Promise<Folder>;
@@ -26,7 +27,7 @@ export function useFolderActions({
 }: UseFolderActionsParams) {
   const location = useLocation();
   const nav = useAppNavigation();
-  const folderNameInputValue = useAtomValue(folderNameInputValueAtom);
+  const { folderNameInputValue } = useFoldersStore();
   const setFolderNameInputValue = useSetAtom(folderNameInputValueAtom);
 
   const moveItemToFolder = useCallback((itemId: number, folderId: number) => {

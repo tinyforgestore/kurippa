@@ -2,6 +2,7 @@ import { render, screen, fireEvent, waitFor, act } from "@testing-library/react"
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { MemoryRouter } from "react-router-dom";
 import { Provider, createStore } from "jotai";
+import { StoreProvider } from "@/store";
 import App from "@/components/App";
 
 // ---------------------------------------------------------------------------
@@ -113,7 +114,7 @@ function makeItem(id: number, text: string) {
 
 function renderApp() {
   const store = createStore();
-  return render(<Provider store={store}><MemoryRouter><App /></MemoryRouter></Provider>);
+  return render(<Provider store={store}><StoreProvider><MemoryRouter><App /></MemoryRouter></StoreProvider></Provider>);
 }
 
 // ---------------------------------------------------------------------------

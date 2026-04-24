@@ -1,11 +1,12 @@
 import { useRef } from "react";
-import { useAtomValue, useSetAtom } from "jotai";
+import { useSetAtom } from "jotai";
 import {
   multiSelectActiveAtom,
   multiSelectSelectionsAtom,
   multiSelectFlashingIdAtom,
   multiSelectMaxToastVisibleAtom,
 } from "@/atoms/multiSelect";
+import { useMultiSelectStore } from "@/store";
 
 export interface MultiSelectState {
   active: boolean;
@@ -22,10 +23,7 @@ const FLASH_DURATION_MS = 150;
 const TOAST_DURATION_MS = 1500;
 
 export function useMultiSelect(): MultiSelectState {
-  const active = useAtomValue(multiSelectActiveAtom);
-  const selections = useAtomValue(multiSelectSelectionsAtom);
-  const flashingId = useAtomValue(multiSelectFlashingIdAtom);
-  const maxToastVisible = useAtomValue(multiSelectMaxToastVisibleAtom);
+  const { active, selections, flashingId, maxToastVisible } = useMultiSelectStore();
 
   const setActive = useSetAtom(multiSelectActiveAtom);
   const setSelections = useSetAtom(multiSelectSelectionsAtom);

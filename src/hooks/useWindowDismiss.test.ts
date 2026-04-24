@@ -1,6 +1,14 @@
 import { renderHook, act } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { createElement } from "react";
+import { Provider, createStore } from "jotai";
+import { StoreProvider } from "@/store";
 import { useWindowDismiss } from "@/hooks/useWindowDismiss";
+
+function makeWrapper() {
+  const store = createStore();
+  return { wrapper: ({ children }: { children: React.ReactNode }) => createElement(Provider, { store }, createElement(StoreProvider, null, children)) };
+}
 
 const mockHide = vi.fn().mockResolvedValue(undefined);
 const mockUnlisten = vi.fn();
@@ -37,7 +45,8 @@ describe("useWindowDismiss", () => {
 
   describe("dismiss()", () => {
     it("calling dismiss() clears query to empty string", async () => {
-      const { result } = renderHook(() => useWindowDismiss());
+      const { wrapper } = makeWrapper();
+      const { result } = renderHook(() => useWindowDismiss(), { wrapper });
 
       // Set a non-empty query first
       act(() => {
@@ -52,7 +61,8 @@ describe("useWindowDismiss", () => {
     });
 
     it("calling dismiss() calls hide()", () => {
-      const { result } = renderHook(() => useWindowDismiss());
+      const { wrapper } = makeWrapper();
+      const { result } = renderHook(() => useWindowDismiss(), { wrapper });
 
       act(() => {
         result.current.dismiss();
@@ -63,7 +73,8 @@ describe("useWindowDismiss", () => {
 
   describe("setQuery", () => {
     it("setQuery updates query state", () => {
-      const { result } = renderHook(() => useWindowDismiss());
+      const { wrapper } = makeWrapper();
+      const { result } = renderHook(() => useWindowDismiss(), { wrapper });
 
       act(() => {
         result.current.setQuery("hello");
@@ -74,7 +85,8 @@ describe("useWindowDismiss", () => {
 
   describe("onFocusChanged — focus gained", () => {
     it("focus gained resets query to empty string", async () => {
-      const { result } = renderHook(() => useWindowDismiss());
+      const { wrapper } = makeWrapper();
+      const { result } = renderHook(() => useWindowDismiss(), { wrapper });
 
       // Capture the callback registered via onFocusChanged
       await act(async () => {
@@ -95,7 +107,8 @@ describe("useWindowDismiss", () => {
 
     it("focus gained calls onShow callback", async () => {
       const onShow = vi.fn();
-      renderHook(() => useWindowDismiss(onShow));
+      const { wrapper } = makeWrapper();
+      renderHook(() => useWindowDismiss(onShow), { wrapper });
 
       await act(async () => {
         await Promise.resolve();
@@ -108,7 +121,8 @@ describe("useWindowDismiss", () => {
     });
 
     it("focus gained does not error when onShow is omitted", async () => {
-      renderHook(() => useWindowDismiss());
+      const { wrapper } = makeWrapper();
+      renderHook(() => useWindowDismiss(), { wrapper });
 
       await act(async () => {
         await Promise.resolve();
@@ -132,7 +146,8 @@ describe("useWindowDismiss", () => {
     });
 
     it("focus lost more than 300ms after last focus calls dismiss (hide)", async () => {
-      renderHook(() => useWindowDismiss());
+      const { wrapper } = makeWrapper();
+      renderHook(() => useWindowDismiss(), { wrapper });
 
       await act(async () => {
         await Promise.resolve();
@@ -154,7 +169,8 @@ describe("useWindowDismiss", () => {
     });
 
     it("focus lost within 300ms of gaining focus does NOT call hide", async () => {
-      renderHook(() => useWindowDismiss());
+      const { wrapper } = makeWrapper();
+      renderHook(() => useWindowDismiss(), { wrapper });
 
       await act(async () => {
         await Promise.resolve();
@@ -178,7 +194,8 @@ describe("useWindowDismiss", () => {
 
   describe("cleanup", () => {
     it("calls the unlisten function when the hook unmounts", async () => {
-      const { unmount } = renderHook(() => useWindowDismiss());
+      const { wrapper } = makeWrapper();
+      const { unmount } = renderHook(() => useWindowDismiss(), { wrapper });
 
       await act(async () => {
         await Promise.resolve();

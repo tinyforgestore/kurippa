@@ -1,7 +1,8 @@
 import { useEffect } from "react";
-import { useAtomValue, useSetAtom } from "jotai";
+import { useSetAtom } from "jotai";
 import { invoke } from "@tauri-apps/api/core";
 import { clearConfirmShowAtom } from "@/atoms/ui";
+import { useUIStore } from "@/store";
 
 interface UseClearConfirmParams {
   clearNonPinned: () => void;
@@ -15,7 +16,7 @@ export interface ClearConfirmState {
 }
 
 export function useClearConfirm({ clearNonPinned }: UseClearConfirmParams): ClearConfirmState {
-  const show = useAtomValue(clearConfirmShowAtom);
+  const { clearConfirmShow: show } = useUIStore();
   const setShow = useSetAtom(clearConfirmShowAtom);
 
   useEffect(() => {

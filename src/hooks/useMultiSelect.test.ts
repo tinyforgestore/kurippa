@@ -2,11 +2,12 @@ import { renderHook, act } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { createElement } from "react";
 import { createStore, Provider } from "jotai";
+import { StoreProvider } from "@/store";
 import { useMultiSelect } from "@/hooks/useMultiSelect";
 
 function makeWrapper() {
   const store = createStore();
-  return { wrapper: ({ children }: { children: React.ReactNode }) => createElement(Provider, { store }, children) };
+  return { wrapper: ({ children }: { children: React.ReactNode }) => createElement(Provider, { store }, createElement(StoreProvider, null, children)) };
 }
 
 describe("useMultiSelect", () => {

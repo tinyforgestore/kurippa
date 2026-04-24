@@ -1,16 +1,15 @@
 import { useCallback, useEffect, useRef } from "react";
-import { useAtomValue, useSetAtom } from "jotai";
+import { useSetAtom } from "jotai";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { error as logError, info as logInfo } from "@tauri-apps/plugin-log";
 import { ClipboardItem, HISTORY_DISPLAY_LIMIT } from "@/types";
 import { allItemsAtom } from "@/atoms/clipboard";
-import { resultsAtom } from "@/atoms/derived";
+import { useClipboardStore } from "@/store";
 
 export function useClipboardHistory() {
-  const allItems = useAtomValue(allItemsAtom);
+  const { allItems, results } = useClipboardStore();
   const setAllItems = useSetAtom(allItemsAtom);
-  const results = useAtomValue(resultsAtom);
   const ignoringClipboardUpdatesUntil = useRef<number>(0);
 
   useEffect(() => {

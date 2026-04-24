@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { createElement } from "react";
 import { MemoryRouter } from "react-router-dom";
 import { Provider, createStore } from "jotai";
+import { StoreProvider } from "@/store";
 import { useAppState } from "@/hooks/useAppState";
 
 // ---------------------------------------------------------------------------
@@ -83,7 +84,7 @@ function setupMocks() {
 function makeWrapper() {
   const store = createStore();
   const wrapper = ({ children }: { children: React.ReactNode }) =>
-    createElement(Provider, { store }, createElement(MemoryRouter, null, children));
+    createElement(Provider, { store }, createElement(StoreProvider, null, createElement(MemoryRouter, null, children)));
   return { store, wrapper };
 }
 

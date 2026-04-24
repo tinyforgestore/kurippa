@@ -1,5 +1,8 @@
 import { renderHook, act } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { createElement } from "react";
+import { Provider, createStore } from "jotai";
+import { StoreProvider } from "@/store";
 import { useItemSelection } from "@/hooks/useItemSelection";
 import { ListEntry } from "@/types";
 
@@ -107,6 +110,11 @@ function makeOptions(overrides: Partial<{
   };
 }
 
+function makeWrapper() {
+  const store = createStore();
+  return { wrapper: ({ children }: { children: React.ReactNode }) => createElement(Provider, { store }, createElement(StoreProvider, null, children)) };
+}
+
 function fireKeydown(key: string, modifiers: Partial<KeyboardEventInit> = {}) {
   const event = new KeyboardEvent("keydown", {
     key,
@@ -128,17 +136,19 @@ describe("useItemSelection", () => {
   describe("basic navigation", () => {
     it("initialises selectedIndex to 0", () => {
       const entries: ListEntry[] = [makeItemEntry(1), makeItemEntry(2)];
+      const { wrapper } = makeWrapper();
       const { result } = renderHook(() =>
         useItemSelection(entries, vi.fn(), "", makeOptions())
-      );
+      , { wrapper });
       expect(result.current.selectedIndex).toBe(0);
     });
 
     it("ArrowDown increments selectedIndex", () => {
       const entries: ListEntry[] = [makeItemEntry(1), makeItemEntry(2), makeItemEntry(3)];
+      const { wrapper } = makeWrapper();
       const { result } = renderHook(() =>
         useItemSelection(entries, vi.fn(), "", makeOptions())
-      );
+      , { wrapper });
 
       act(() => {
         fireKeydown("ArrowDown");
@@ -148,9 +158,10 @@ describe("useItemSelection", () => {
 
     it("ArrowDown does not exceed last index", () => {
       const entries: ListEntry[] = [makeItemEntry(1)];
+      const { wrapper } = makeWrapper();
       const { result } = renderHook(() =>
         useItemSelection(entries, vi.fn(), "", makeOptions())
-      );
+      , { wrapper });
 
       act(() => {
         fireKeydown("ArrowDown");
@@ -160,9 +171,10 @@ describe("useItemSelection", () => {
 
     it("ArrowUp decrements selectedIndex", () => {
       const entries: ListEntry[] = [makeItemEntry(1), makeItemEntry(2)];
+      const { wrapper } = makeWrapper();
       const { result } = renderHook(() =>
         useItemSelection(entries, vi.fn(), "", makeOptions())
-      );
+      , { wrapper });
 
       act(() => {
         result.current.setSelectedIndex(1);
@@ -175,9 +187,10 @@ describe("useItemSelection", () => {
 
     it("ArrowUp does not go below 0", () => {
       const entries: ListEntry[] = [makeItemEntry(1), makeItemEntry(2)];
+      const { wrapper } = makeWrapper();
       const { result } = renderHook(() =>
         useItemSelection(entries, vi.fn(), "", makeOptions())
-      );
+      , { wrapper });
 
       act(() => {
         fireKeydown("ArrowUp");
@@ -188,7 +201,8 @@ describe("useItemSelection", () => {
     it("Escape calls dismiss", () => {
       const dismiss = vi.fn();
       const entries: ListEntry[] = [makeItemEntry(1)];
-      renderHook(() => useItemSelection(entries, dismiss, "", makeOptions()));
+      const { wrapper } = makeWrapper();
+      renderHook(() => useItemSelection(entries, dismiss, "", makeOptions()), { wrapper });
 
       act(() => {
         fireKeydown("Escape");
@@ -201,9 +215,10 @@ describe("useItemSelection", () => {
     it("calls onPinToggle with item id when ⌘P pressed on an item entry", () => {
       const onPinToggle = vi.fn();
       const entries: ListEntry[] = [makeItemEntry(42), makeItemEntry(99)];
+      const { wrapper } = makeWrapper();
       renderHook(() =>
         useItemSelection(entries, vi.fn(), "", makeOptions({ onPinToggle }))
-      );
+      , { wrapper });
 
       act(() => {
         fireKeydown("p", { metaKey: true });
@@ -214,9 +229,10 @@ describe("useItemSelection", () => {
     it("calls onPinToggle with item id when Ctrl+P pressed on an item entry", () => {
       const onPinToggle = vi.fn();
       const entries: ListEntry[] = [makeItemEntry(7)];
+      const { wrapper } = makeWrapper();
       renderHook(() =>
         useItemSelection(entries, vi.fn(), "", makeOptions({ onPinToggle }))
-      );
+      , { wrapper });
 
       act(() => {
         fireKeydown("p", { ctrlKey: true });
@@ -227,9 +243,10 @@ describe("useItemSelection", () => {
     it("does not call onPinToggle when selected entry is a pinned-header", () => {
       const onPinToggle = vi.fn();
       const entries: ListEntry[] = [makePinnedHeader(3), makeItemEntry(1)];
+      const { wrapper } = makeWrapper();
       renderHook(() =>
         useItemSelection(entries, vi.fn(), "", makeOptions({ onPinToggle }))
-      );
+      , { wrapper });
 
       act(() => {
         fireKeydown("p", { metaKey: true });
@@ -250,9 +267,10 @@ describe("useItemSelection", () => {
     it("⌘Backspace on an item entry triggers onDelete end-to-end", () => {
       const onDelete = vi.fn();
       const entries: ListEntry[] = [makeItemEntry(10), makeItemEntry(20)];
+      const { wrapper } = makeWrapper();
       renderHook(() =>
         useItemSelection(entries, vi.fn(), "", makeOptions({ onDelete }))
-      );
+      , { wrapper });
 
       act(() => {
         fireKeydown("Backspace", { metaKey: true });
@@ -264,9 +282,10 @@ describe("useItemSelection", () => {
     it("⌘Delete on an item entry triggers onDelete end-to-end", () => {
       const onDelete = vi.fn();
       const entries: ListEntry[] = [makeItemEntry(10), makeItemEntry(20)];
+      const { wrapper } = makeWrapper();
       renderHook(() =>
         useItemSelection(entries, vi.fn(), "", makeOptions({ onDelete }))
-      );
+      , { wrapper });
 
       act(() => {
         fireKeydown("Delete", { metaKey: true });
@@ -278,9 +297,10 @@ describe("useItemSelection", () => {
     it("⌘Backspace on a pinned-header does not call onDelete", () => {
       const onDelete = vi.fn();
       const entries: ListEntry[] = [makePinnedHeader(2), makeItemEntry(1)];
+      const { wrapper } = makeWrapper();
       renderHook(() =>
         useItemSelection(entries, vi.fn(), "", makeOptions({ onDelete }))
-      );
+      , { wrapper });
 
       act(() => {
         fireKeydown("Backspace", { metaKey: true });
@@ -293,9 +313,10 @@ describe("useItemSelection", () => {
   describe("quick-activate (⌘0–9 / Ctrl+0–9)", () => {
     it("pastes the item at visual position 0 when ⌘0 pressed", () => {
       const entries: ListEntry[] = [makeItemEntry(10, false, "hello"), makeItemEntry(20)];
+      const { wrapper } = makeWrapper();
       renderHook(() =>
         useItemSelection(entries, vi.fn(), "", makeOptions())
-      );
+      , { wrapper });
 
       act(() => {
         fireKeydown("0", { metaKey: true });
@@ -309,9 +330,10 @@ describe("useItemSelection", () => {
 
     it("pastes the item at visual position 1 when ⌘1 pressed", () => {
       const entries: ListEntry[] = [makeItemEntry(10, false, "first"), makeItemEntry(20, false, "second")];
+      const { wrapper } = makeWrapper();
       renderHook(() =>
         useItemSelection(entries, vi.fn(), "", makeOptions())
-      );
+      , { wrapper });
 
       act(() => {
         fireKeydown("1", { metaKey: true });
@@ -329,9 +351,10 @@ describe("useItemSelection", () => {
         makePinnedHeader(2),
         makeItemEntry(10, false, "first"),
       ];
+      const { wrapper } = makeWrapper();
       renderHook(() =>
         useItemSelection(entries, vi.fn(), "", makeOptions({ onEnterSection }))
-      );
+      , { wrapper });
 
       act(() => {
         fireKeydown("0", { metaKey: true });
@@ -343,9 +366,10 @@ describe("useItemSelection", () => {
     it("does nothing when N is out of range", () => {
       const onEnterSection = vi.fn();
       const entries: ListEntry[] = [makeItemEntry(1)];
+      const { wrapper } = makeWrapper();
       renderHook(() =>
         useItemSelection(entries, vi.fn(), "", makeOptions({ onEnterSection }))
-      );
+      , { wrapper });
 
       act(() => {
         fireKeydown("5", { metaKey: true });
@@ -360,9 +384,10 @@ describe("useItemSelection", () => {
         makeItemEntry(10, false, "first"),
         makeItemEntry(20, false, "second"),
       ];
+      const { wrapper } = makeWrapper();
       renderHook(() =>
         useItemSelection(entries, vi.fn(), "", makeOptions())
-      );
+      , { wrapper });
 
       act(() => {
         fireKeydown("2", { metaKey: true });
@@ -379,6 +404,7 @@ describe("useItemSelection", () => {
     it("Enter on a pinned-header calls onEnterSection", () => {
       const onEnterSection = vi.fn();
       const entries: ListEntry[] = [makePinnedHeader(3), makeItemEntry(1)];
+      const { wrapper } = makeWrapper();
       renderHook(() =>
         useItemSelection(
           entries,
@@ -386,7 +412,7 @@ describe("useItemSelection", () => {
           "",
           makeOptions({ onEnterSection })
         )
-      );
+      , { wrapper });
 
       act(() => {
         fireKeydown("Enter");
@@ -397,9 +423,10 @@ describe("useItemSelection", () => {
 
     it("Enter on a pinned-header does not invoke paste_item", () => {
       const entries: ListEntry[] = [makePinnedHeader(2), makeItemEntry(1)];
+      const { wrapper } = makeWrapper();
       renderHook(() =>
         useItemSelection(entries, vi.fn(), "", makeOptions())
-      );
+      , { wrapper });
 
       act(() => {
         fireKeydown("Enter");
@@ -410,6 +437,7 @@ describe("useItemSelection", () => {
     it("ArrowLeft when inPinnedSection is true calls onExitSection", () => {
       const onExitSection = vi.fn();
       const entries: ListEntry[] = [makeItemEntry(1), makeItemEntry(2)];
+      const { wrapper } = makeWrapper();
       renderHook(() =>
         useItemSelection(
           entries,
@@ -417,7 +445,7 @@ describe("useItemSelection", () => {
           "",
           makeOptions({ inPinnedSection: true, onExitSection })
         )
-      );
+      , { wrapper });
 
       act(() => {
         fireKeydown("ArrowLeft");
@@ -428,6 +456,7 @@ describe("useItemSelection", () => {
     it("ArrowLeft when inPinnedSection is false does not call onExitSection", () => {
       const onExitSection = vi.fn();
       const entries: ListEntry[] = [makeItemEntry(1)];
+      const { wrapper } = makeWrapper();
       renderHook(() =>
         useItemSelection(
           entries,
@@ -435,7 +464,7 @@ describe("useItemSelection", () => {
           "",
           makeOptions({ inPinnedSection: false, onExitSection })
         )
-      );
+      , { wrapper });
 
       act(() => {
         fireKeydown("ArrowLeft");
@@ -445,6 +474,7 @@ describe("useItemSelection", () => {
 
     it("ArrowLeft when inPinnedSection is true resets selectedIndex to 0", () => {
       const entries: ListEntry[] = [makeItemEntry(1), makeItemEntry(2), makeItemEntry(3)];
+      const { wrapper } = makeWrapper();
       const { result } = renderHook(() =>
         useItemSelection(
           entries,
@@ -452,7 +482,7 @@ describe("useItemSelection", () => {
           "",
           makeOptions({ inPinnedSection: true })
         )
-      );
+      , { wrapper });
 
       act(() => {
         result.current.setSelectedIndex(2);
@@ -467,9 +497,10 @@ describe("useItemSelection", () => {
       // Place pinned-header at index 1 so we can start at index 1 with a
       // non-zero selection, then confirm Enter resets it back to 0.
       const entries: ListEntry[] = [makeItemEntry(1), makePinnedHeader(3)];
+      const { wrapper } = makeWrapper();
       const { result } = renderHook(() =>
         useItemSelection(entries, vi.fn(), "", makeOptions())
-      );
+      , { wrapper });
 
       // Navigate to index 1 where the pinned-header sits
       act(() => {
@@ -486,9 +517,10 @@ describe("useItemSelection", () => {
     it("ArrowRight on an item entry calls onOpenPreview", () => {
       const onOpenPreview = vi.fn();
       const entries: ListEntry[] = [makeItemEntry(1)];
+      const { wrapper } = makeWrapper();
       renderHook(() =>
         useItemSelection(entries, vi.fn(), "", makeOptions({ onOpenPreview }))
-      );
+      , { wrapper });
 
       act(() => {
         fireKeydown("ArrowRight");
@@ -500,9 +532,10 @@ describe("useItemSelection", () => {
       const onEnterSection = vi.fn();
       const onOpenPreview = vi.fn();
       const entries: ListEntry[] = [makePinnedHeader(3), makeItemEntry(1)];
+      const { wrapper } = makeWrapper();
       renderHook(() =>
         useItemSelection(entries, vi.fn(), "", makeOptions({ onEnterSection, onOpenPreview }))
-      );
+      , { wrapper });
 
       act(() => {
         fireKeydown("ArrowRight");
@@ -513,9 +546,10 @@ describe("useItemSelection", () => {
 
     it("ArrowRight on a pinned-header resets selectedIndex to 0", () => {
       const entries: ListEntry[] = [makeItemEntry(1), makePinnedHeader(3)];
+      const { wrapper } = makeWrapper();
       const { result } = renderHook(() =>
         useItemSelection(entries, vi.fn(), "", makeOptions())
-      );
+      , { wrapper });
 
       act(() => {
         result.current.setSelectedIndex(1);
@@ -530,6 +564,7 @@ describe("useItemSelection", () => {
       const onClosePreview = vi.fn();
       const onExitSection = vi.fn();
       const entries: ListEntry[] = [makeItemEntry(1)];
+      const { wrapper } = makeWrapper();
       renderHook(() =>
         useItemSelection(
           entries,
@@ -537,7 +572,7 @@ describe("useItemSelection", () => {
           "",
           makeOptions({ inPinnedSection: false, onClosePreview, onExitSection })
         )
-      );
+      , { wrapper });
 
       act(() => {
         fireKeydown("ArrowLeft");
@@ -550,6 +585,7 @@ describe("useItemSelection", () => {
       const onExitSection = vi.fn();
       const onClosePreview = vi.fn();
       const entries: ListEntry[] = [makeItemEntry(1), makeItemEntry(2)];
+      const { wrapper } = makeWrapper();
       renderHook(() =>
         useItemSelection(
           entries,
@@ -557,7 +593,7 @@ describe("useItemSelection", () => {
           "",
           makeOptions({ inPinnedSection: true, onExitSection, onClosePreview })
         )
-      );
+      , { wrapper });
 
       act(() => {
         fireKeydown("ArrowLeft");
@@ -571,9 +607,10 @@ describe("useItemSelection", () => {
     it("Enter on a folder-header calls onEnterFolderSection with its id", () => {
       const onEnterFolderSection = vi.fn();
       const entries: ListEntry[] = [makeFolderHeader(7)];
+      const { wrapper } = makeWrapper();
       renderHook(() =>
         useItemSelection(entries, vi.fn(), "", makeOptions({ onEnterFolderSection }))
-      );
+      , { wrapper });
 
       act(() => { fireKeydown("Enter"); });
       expect(onEnterFolderSection).toHaveBeenCalledWith(7);
@@ -581,9 +618,10 @@ describe("useItemSelection", () => {
 
     it("Enter on a folder-header resets selectedIndex to 0", () => {
       const entries: ListEntry[] = [makeItemEntry(1), makeFolderHeader(7)];
+      const { wrapper } = makeWrapper();
       const { result } = renderHook(() =>
         useItemSelection(entries, vi.fn(), "", makeOptions())
-      );
+      , { wrapper });
 
       act(() => { result.current.setSelectedIndex(1); });
       act(() => { fireKeydown("Enter"); });
@@ -593,9 +631,10 @@ describe("useItemSelection", () => {
     it("ArrowRight on a folder-header calls onEnterFolderSection with its id", () => {
       const onEnterFolderSection = vi.fn();
       const entries: ListEntry[] = [makeFolderHeader(3)];
+      const { wrapper } = makeWrapper();
       renderHook(() =>
         useItemSelection(entries, vi.fn(), "", makeOptions({ onEnterFolderSection }))
-      );
+      , { wrapper });
 
       act(() => { fireKeydown("ArrowRight"); });
       expect(onEnterFolderSection).toHaveBeenCalledWith(3);
@@ -604,9 +643,10 @@ describe("useItemSelection", () => {
     it("⌘Backspace on a folder-header calls onDeleteFolder with its id and name", () => {
       const onDeleteFolder = vi.fn();
       const entries: ListEntry[] = [makeFolderHeader(5, "Work")];
+      const { wrapper } = makeWrapper();
       renderHook(() =>
         useItemSelection(entries, vi.fn(), "", makeOptions({ onDeleteFolder }))
-      );
+      , { wrapper });
 
       act(() => { fireKeydown("Backspace", { metaKey: true }); });
       expect(onDeleteFolder).toHaveBeenCalledWith(5, "Work");
@@ -615,9 +655,10 @@ describe("useItemSelection", () => {
     it("⌘Delete on a folder-header calls onDeleteFolder with its id and name", () => {
       const onDeleteFolder = vi.fn();
       const entries: ListEntry[] = [makeFolderHeader(5, "Work")];
+      const { wrapper } = makeWrapper();
       renderHook(() =>
         useItemSelection(entries, vi.fn(), "", makeOptions({ onDeleteFolder }))
-      );
+      , { wrapper });
 
       act(() => { fireKeydown("Delete", { metaKey: true }); });
       expect(onDeleteFolder).toHaveBeenCalledWith(5, "Work");
@@ -626,9 +667,10 @@ describe("useItemSelection", () => {
     it("⌘N quick-activate on a folder-header calls onEnterFolderSection", () => {
       const onEnterFolderSection = vi.fn();
       const entries: ListEntry[] = [makeFolderHeader(9)];
+      const { wrapper } = makeWrapper();
       renderHook(() =>
         useItemSelection(entries, vi.fn(), "", makeOptions({ onEnterFolderSection }))
-      );
+      , { wrapper });
 
       act(() => { fireKeydown("0", { metaKey: true }); });
       expect(onEnterFolderSection).toHaveBeenCalledWith(9);
@@ -638,9 +680,10 @@ describe("useItemSelection", () => {
   describe("pasteSelected", () => {
     it("does not invoke paste_item when selected entry is a pinned-header", () => {
       const entries: ListEntry[] = [makePinnedHeader(3), makeItemEntry(1)];
+      const { wrapper } = makeWrapper();
       const { result } = renderHook(() =>
         useItemSelection(entries, vi.fn(), "", makeOptions())
-      );
+      , { wrapper });
 
       act(() => {
         result.current.pasteSelected(false);
@@ -650,9 +693,10 @@ describe("useItemSelection", () => {
 
     it("invokes paste_item when selected entry is an item", () => {
       const entries: ListEntry[] = [makeItemEntry(1, false, "paste me")];
+      const { wrapper } = makeWrapper();
       const { result } = renderHook(() =>
         useItemSelection(entries, vi.fn(), "", makeOptions())
-      );
+      , { wrapper });
 
       act(() => {
         result.current.pasteSelected(false);
@@ -666,9 +710,10 @@ describe("useItemSelection", () => {
 
     it("Enter key triggers paste on an item entry", () => {
       const entries: ListEntry[] = [makeItemEntry(1, false, "enter-paste")];
+      const { wrapper } = makeWrapper();
       renderHook(() =>
         useItemSelection(entries, vi.fn(), "", makeOptions())
-      );
+      , { wrapper });
 
       act(() => {
         fireKeydown("Enter");
@@ -683,9 +728,10 @@ describe("useItemSelection", () => {
     it("Shift+Enter calls onOpenPasteAs with the current item", () => {
       const onOpenPasteAs = vi.fn();
       const entries: ListEntry[] = [makeItemEntry(1, false, "plain-text-paste")];
+      const { wrapper } = makeWrapper();
       renderHook(() =>
         useItemSelection(entries, vi.fn(), "", makeOptions({ onOpenPasteAs }))
-      );
+      , { wrapper });
 
       act(() => {
         fireKeydown("Enter", { shiftKey: true });
@@ -696,9 +742,10 @@ describe("useItemSelection", () => {
 
     it("calls paste_image_item when item is an image with a valid path", () => {
       const entries: ListEntry[] = [makeImageEntry(42, "42.png")];
+      const { wrapper } = makeWrapper();
       const { result } = renderHook(() =>
         useItemSelection(entries, vi.fn(), "", makeOptions())
-      );
+      , { wrapper });
 
       act(() => {
         result.current.pasteSelected(false);
@@ -708,9 +755,10 @@ describe("useItemSelection", () => {
 
     it("calls paste_item when image item has null image_path", () => {
       const entries: ListEntry[] = [makeImageEntry(10, null)];
+      const { wrapper } = makeWrapper();
       const { result } = renderHook(() =>
         useItemSelection(entries, vi.fn(), "", makeOptions())
-      );
+      , { wrapper });
 
       act(() => {
         result.current.pasteSelected(false);
@@ -720,9 +768,10 @@ describe("useItemSelection", () => {
 
     it("calls paste_item when image item is pasted with plainText=true", () => {
       const entries: ListEntry[] = [makeImageEntry(99, "42.png")];
+      const { wrapper } = makeWrapper();
       const { result } = renderHook(() =>
         useItemSelection(entries, vi.fn(), "", makeOptions())
-      );
+      , { wrapper });
 
       act(() => {
         result.current.pasteSelected(true);

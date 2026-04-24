@@ -2,6 +2,7 @@ import { renderHook, act } from "@testing-library/react";
 import { describe, it, expect } from "vitest";
 import { createElement } from "react";
 import { Provider, createStore } from "jotai";
+import { StoreProvider } from "@/store";
 import { useSectionNavigation } from "@/hooks/useSectionNavigation";
 import { ClipboardItem, FuzzyResult, Folder } from "@/types";
 import { allItemsAtom } from "@/atoms/clipboard";
@@ -35,7 +36,7 @@ function setup(results: FuzzyResult[], folders: Folder[], query: string) {
   store.set(foldersAtom, folders);
   store.set(queryAtom, query);
   const wrapper = ({ children }: { children: React.ReactNode }) =>
-    createElement(Provider, { store }, children);
+    createElement(Provider, { store }, createElement(StoreProvider, null, children));
   return renderHook(() => useSectionNavigation(), { wrapper });
 }
 
@@ -101,7 +102,7 @@ describe("useSectionNavigation", () => {
       store.set(foldersAtom, []);
       store.set(queryAtom, "");
       const wrapper = ({ children }: { children: React.ReactNode }) =>
-        createElement(Provider, { store }, children);
+        createElement(Provider, { store }, createElement(StoreProvider, null, children));
       const { result } = renderHook(() => useSectionNavigation(), { wrapper });
 
       act(() => result.current.enterPinnedSection());
@@ -135,7 +136,7 @@ describe("useSectionNavigation", () => {
       store.set(foldersAtom, [folder]);
       store.set(queryAtom, "");
       const wrapper = ({ children }: { children: React.ReactNode }) =>
-        createElement(Provider, { store }, children);
+        createElement(Provider, { store }, createElement(StoreProvider, null, children));
       const { result } = renderHook(() => useSectionNavigation(), { wrapper });
 
       act(() => result.current.enterFolderSection(10));

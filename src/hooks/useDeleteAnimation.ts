@@ -1,15 +1,16 @@
 import { useCallback, useEffect, useRef } from "react";
-import { useAtomValue, useSetAtom } from "jotai";
+import { useSetAtom } from "jotai";
 import { DELETE_DURATION_MS } from "@/constants/animation";
 import { info } from "@tauri-apps/plugin-log";
 import { deletingIdAtom } from "@/atoms/clipboard";
+import { useClipboardStore } from "@/store";
 
 export function useDeleteAnimation(
   onDelete: (id: number) => void,
   setSelectedIndex: React.Dispatch<React.SetStateAction<number>>,
   getEntriesLength: () => number
 ): { deletingId: number | null; triggerDelete: (id: number) => void } {
-  const deletingId = useAtomValue(deletingIdAtom);
+  const { deletingId } = useClipboardStore();
   const setDeletingId = useSetAtom(deletingIdAtom);
   const deleteTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 

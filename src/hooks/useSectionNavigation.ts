@@ -1,17 +1,13 @@
 import { useEffect } from "react";
-import { useAtomValue, useSetAtom } from "jotai";
+import { useSetAtom } from "jotai";
 import { expandedSectionAtom } from "@/atoms/navigation";
-import { resultsAtom, visibleEntriesAtom, inPinnedSectionAtom, expandedFolderIdAtom } from "@/atoms/derived";
-import { foldersAtom } from "@/atoms/folders";
+import { useClipboardStore, useFoldersStore, useNavigationStore } from "@/store";
 
 export function useSectionNavigation() {
-  const expandedSection = useAtomValue(expandedSectionAtom);
+  const { expandedSection, inPinnedSection, expandedFolderId } = useNavigationStore();
   const setExpandedSection = useSetAtom(expandedSectionAtom);
-  const results = useAtomValue(resultsAtom);
-  const folders = useAtomValue(foldersAtom);
-  const inPinnedSection = useAtomValue(inPinnedSectionAtom);
-  const expandedFolderId = useAtomValue(expandedFolderIdAtom);
-  const visibleEntries = useAtomValue(visibleEntriesAtom);
+  const { results, visibleEntries } = useClipboardStore();
+  const { folders } = useFoldersStore();
 
   const pinnedResultsLength = results.filter((r) => r.item.pinned).length;
 

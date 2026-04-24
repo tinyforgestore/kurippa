@@ -1,15 +1,15 @@
 import { useEffect, useCallback } from "react";
-import { useAtomValue, useSetAtom } from "jotai";
+import { useSetAtom } from "jotai";
 import { invoke } from "@tauri-apps/api/core";
 import { foldersAtom, maxFoldersToastAtom } from "@/atoms/folders";
+import { useFoldersStore } from "@/store";
 
 interface UseFoldersParams {
   onTrialError?: (feature: string) => void;
 }
 
 export function useFolders({ onTrialError }: UseFoldersParams = {}) {
-  const folders = useAtomValue(foldersAtom);
-  const maxFoldersToast = useAtomValue(maxFoldersToastAtom);
+  const { folders, maxFoldersToast } = useFoldersStore();
   const setFolders = useSetAtom(foldersAtom);
   const setMaxFoldersToast = useSetAtom(maxFoldersToastAtom);
 

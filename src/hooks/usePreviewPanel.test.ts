@@ -1,6 +1,14 @@
 import { renderHook, act } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { createElement } from "react";
+import { Provider, createStore } from "jotai";
+import { StoreProvider } from "@/store";
 import { usePreviewPanel, PANEL_WIDTH } from "@/hooks/usePreviewPanel";
+
+function makeWrapper() {
+  const store = createStore();
+  return { wrapper: ({ children }: { children: React.ReactNode }) => createElement(Provider, { store }, createElement(StoreProvider, null, children)) };
+}
 
 // Mock Tauri webviewWindow
 const mockSetSize = vi.fn().mockResolvedValue(undefined);
@@ -27,24 +35,28 @@ describe("usePreviewPanel", () => {
   });
 
   it("initialises isOpen to false when localStorage has no value", () => {
-    const { result } = renderHook(() => usePreviewPanel());
+    const { wrapper } = makeWrapper();
+    const { result } = renderHook(() => usePreviewPanel(), { wrapper });
     expect(result.current.isOpen).toBe(false);
   });
 
   it("initialises isOpen to false even when localStorage has 'true'", () => {
     localStorage.setItem("kurippa:preview-panel-open", "true");
-    const { result } = renderHook(() => usePreviewPanel());
+    const { wrapper } = makeWrapper();
+    const { result } = renderHook(() => usePreviewPanel(), { wrapper });
     expect(result.current.isOpen).toBe(false);
   });
 
   it("initialises isOpen to false when localStorage has 'false'", () => {
     localStorage.setItem("kurippa:preview-panel-open", "false");
-    const { result } = renderHook(() => usePreviewPanel());
+    const { wrapper } = makeWrapper();
+    const { result } = renderHook(() => usePreviewPanel(), { wrapper });
     expect(result.current.isOpen).toBe(false);
   });
 
   it("open() sets isOpen to true", () => {
-    const { result } = renderHook(() => usePreviewPanel());
+    const { wrapper } = makeWrapper();
+    const { result } = renderHook(() => usePreviewPanel(), { wrapper });
     act(() => {
       result.current.open();
     });
@@ -52,7 +64,8 @@ describe("usePreviewPanel", () => {
   });
 
   it("open() persists 'true' to localStorage", () => {
-    const { result } = renderHook(() => usePreviewPanel());
+    const { wrapper } = makeWrapper();
+    const { result } = renderHook(() => usePreviewPanel(), { wrapper });
     act(() => {
       result.current.open();
     });
@@ -60,7 +73,8 @@ describe("usePreviewPanel", () => {
   });
 
   it("open() calls setSize with expanded width (LIST_WIDTH + PANEL_WIDTH x 500)", async () => {
-    const { result } = renderHook(() => usePreviewPanel());
+    const { wrapper } = makeWrapper();
+    const { result } = renderHook(() => usePreviewPanel(), { wrapper });
     await act(async () => {
       result.current.open();
     });
@@ -71,7 +85,8 @@ describe("usePreviewPanel", () => {
   });
 
   it("close() sets isOpen to false", () => {
-    const { result } = renderHook(() => usePreviewPanel());
+    const { wrapper } = makeWrapper();
+    const { result } = renderHook(() => usePreviewPanel(), { wrapper });
     act(() => {
       result.current.open();
     });
@@ -82,7 +97,8 @@ describe("usePreviewPanel", () => {
   });
 
   it("close() persists 'false' to localStorage", () => {
-    const { result } = renderHook(() => usePreviewPanel());
+    const { wrapper } = makeWrapper();
+    const { result } = renderHook(() => usePreviewPanel(), { wrapper });
     act(() => {
       result.current.open();
     });
@@ -93,7 +109,8 @@ describe("usePreviewPanel", () => {
   });
 
   it("close() calls setSize with collapsed width (400 x 500)", async () => {
-    const { result } = renderHook(() => usePreviewPanel());
+    const { wrapper } = makeWrapper();
+    const { result } = renderHook(() => usePreviewPanel(), { wrapper });
     await act(async () => {
       result.current.open();
     });
@@ -108,7 +125,8 @@ describe("usePreviewPanel", () => {
   });
 
   it("open() then close() leaves isOpen false", () => {
-    const { result } = renderHook(() => usePreviewPanel());
+    const { wrapper } = makeWrapper();
+    const { result } = renderHook(() => usePreviewPanel(), { wrapper });
     act(() => {
       result.current.open();
     });

@@ -1,11 +1,12 @@
 import { useCallback, useEffect, useRef } from "react";
-import { useAtomValue, useSetAtom } from "jotai";
+import { useSetAtom } from "jotai";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { queryAtom } from "@/atoms/navigation";
 import { pasteAsPreviewTextAtom } from "@/atoms/ui";
+import { useNavigationStore } from "@/store";
 
 export function useWindowDismiss(onShow?: () => void) {
-  const query = useAtomValue(queryAtom);
+  const { query } = useNavigationStore();
   const setQuery = useSetAtom(queryAtom);
   const setPasteAsPreviewText = useSetAtom(pasteAsPreviewTextAtom);
   const inputRef = useRef<HTMLInputElement>(null);

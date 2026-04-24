@@ -1,14 +1,14 @@
 import { useCallback, useRef, RefObject } from "react";
-import { useAtomValue, useSetAtom } from "jotai";
+import { useSetAtom } from "jotai";
 import { LAND_DURATION_MS, LIFT_DURATION_MS } from "@/constants/animation";
 import { liftingIdAtom, landingIdAtom } from "@/atoms/clipboard";
+import { useClipboardStore } from "@/store";
 
 export function usePinAnimation(
   togglePinItem: (id: number) => Promise<void>,
   listRef: RefObject<HTMLDivElement | null>
 ) {
-  const liftingId = useAtomValue(liftingIdAtom);
-  const landingId = useAtomValue(landingIdAtom);
+  const { liftingId, landingId } = useClipboardStore();
   const setLiftingId = useSetAtom(liftingIdAtom);
   const setLandingId = useSetAtom(landingIdAtom);
   const liftTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);

@@ -1,11 +1,12 @@
 import { useEffect } from "react";
-import { useAtomValue, useSetAtom } from "jotai";
+import { useSetAtom } from "jotai";
 import { invoke } from "@tauri-apps/api/core";
 import { AppSettings } from "@/types/settings";
 import { defaultSeparatorAtom } from "@/atoms/settings";
+import { useSettingsStore } from "@/store";
 
 export function useDefaultSeparator(): "newline" | "space" | "comma" {
-  const defaultSeparator = useAtomValue(defaultSeparatorAtom);
+  const { defaultSeparator } = useSettingsStore();
   const setDefaultSeparator = useSetAtom(defaultSeparatorAtom);
 
   useEffect(() => {

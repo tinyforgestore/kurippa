@@ -1,6 +1,14 @@
 import { renderHook, act } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { createElement } from "react";
+import { Provider, createStore } from "jotai";
+import { StoreProvider } from "@/store";
 import { useDeleteAnimation } from "@/hooks/useDeleteAnimation";
+
+function makeWrapper() {
+  const store = createStore();
+  return { wrapper: ({ children }: { children: React.ReactNode }) => createElement(Provider, { store }, createElement(StoreProvider, null, children)) };
+}
 
 // Mock Tauri invoke
 vi.mock("@tauri-apps/api/core", () => ({
@@ -31,8 +39,10 @@ describe("useDeleteAnimation", () => {
       const setSelectedIndex = vi.fn();
       const getEntriesLength = vi.fn().mockReturnValue(2);
 
+      const { wrapper } = makeWrapper();
       const { result } = renderHook(() =>
-        useDeleteAnimation(onDelete, setSelectedIndex, getEntriesLength)
+        useDeleteAnimation(onDelete, setSelectedIndex, getEntriesLength),
+        { wrapper }
       );
 
       act(() => {
@@ -47,8 +57,10 @@ describe("useDeleteAnimation", () => {
       const setSelectedIndex = vi.fn();
       const getEntriesLength = vi.fn().mockReturnValue(1);
 
+      const { wrapper } = makeWrapper();
       const { result } = renderHook(() =>
-        useDeleteAnimation(onDelete, setSelectedIndex, getEntriesLength)
+        useDeleteAnimation(onDelete, setSelectedIndex, getEntriesLength),
+        { wrapper }
       );
 
       act(() => {
@@ -64,8 +76,10 @@ describe("useDeleteAnimation", () => {
       // 3 items → after delete, new length is effectively 2 (indexes 0 and 1)
       const getEntriesLength = vi.fn().mockReturnValue(3);
 
+      const { wrapper } = makeWrapper();
       const { result } = renderHook(() =>
-        useDeleteAnimation(onDelete, setSelectedIndex, getEntriesLength)
+        useDeleteAnimation(onDelete, setSelectedIndex, getEntriesLength),
+        { wrapper }
       );
 
       act(() => {
@@ -85,8 +99,10 @@ describe("useDeleteAnimation", () => {
       const setSelectedIndex = vi.fn();
       const getEntriesLength = vi.fn().mockReturnValue(2);
 
+      const { wrapper } = makeWrapper();
       const { result } = renderHook(() =>
-        useDeleteAnimation(onDelete, setSelectedIndex, getEntriesLength)
+        useDeleteAnimation(onDelete, setSelectedIndex, getEntriesLength),
+        { wrapper }
       );
 
       act(() => {
@@ -109,8 +125,10 @@ describe("useDeleteAnimation", () => {
       const setSelectedIndex = vi.fn();
       const getEntriesLength = vi.fn().mockReturnValue(2);
 
+      const { wrapper } = makeWrapper();
       const { result } = renderHook(() =>
-        useDeleteAnimation(onDelete, setSelectedIndex, getEntriesLength)
+        useDeleteAnimation(onDelete, setSelectedIndex, getEntriesLength),
+        { wrapper }
       );
 
       // First call — starts the animation
@@ -139,8 +157,10 @@ describe("useDeleteAnimation", () => {
       // Only 1 item in the list
       const getEntriesLength = vi.fn().mockReturnValue(1);
 
+      const { wrapper } = makeWrapper();
       const { result } = renderHook(() =>
-        useDeleteAnimation(onDelete, setSelectedIndex, getEntriesLength)
+        useDeleteAnimation(onDelete, setSelectedIndex, getEntriesLength),
+        { wrapper }
       );
 
       act(() => {

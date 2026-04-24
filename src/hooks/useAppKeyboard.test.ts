@@ -2,12 +2,16 @@ import { renderHook, act } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { createElement } from "react";
 import { createStore, Provider } from "jotai";
+import { StoreProvider } from "@/store";
 import { useAppKeyboard } from "@/hooks/useAppKeyboard";
 import { ListEntry } from "@/types";
 
 function makeWrapper() {
   const store = createStore();
-  return { wrapper: ({ children }: { children: React.ReactNode }) => createElement(Provider, { store }, children) };
+  return {
+    wrapper: ({ children }: { children: React.ReactNode }) =>
+      createElement(Provider, { store }, createElement(StoreProvider, null, children)),
+  };
 }
 
 const mockInvoke = vi.fn();

@@ -2,6 +2,7 @@ import { renderHook, act } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { createElement } from "react";
 import { Provider, createStore } from "jotai";
+import { StoreProvider } from "@/store";
 import { useClipboardHistory } from "@/hooks/useClipboardHistory";
 import { ClipboardItem, HISTORY_DISPLAY_LIMIT, Folder } from "@/types";
 import { foldersAtom } from "@/atoms/folders";
@@ -82,7 +83,7 @@ describe("useClipboardHistory", () => {
     store.set(queryAtom, query);
     store.set(foldersAtom, folders);
     const wrapper = ({ children }: { children: React.ReactNode }) =>
-      createElement(Provider, { store }, children);
+      createElement(Provider, { store }, createElement(StoreProvider, null, children));
     const hook = renderHook(() => useClipboardHistory(), { wrapper });
     await act(async () => {});
     return hook;

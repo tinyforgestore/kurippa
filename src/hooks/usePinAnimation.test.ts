@@ -1,6 +1,8 @@
 import { renderHook, act } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { useRef } from "react";
+import { useRef, createElement } from "react";
+import { Provider, createStore } from "jotai";
+import { StoreProvider } from "@/store";
 import { usePinAnimation } from "@/hooks/usePinAnimation";
 import { LAND_DURATION_MS, LIFT_DURATION_MS } from "@/constants/animation";
 
@@ -13,11 +15,17 @@ describe("usePinAnimation", () => {
     vi.useRealTimers();
   });
 
+  function makeWrapper() {
+    const store = createStore();
+    return { wrapper: ({ children }: { children: React.ReactNode }) => createElement(Provider, { store }, createElement(StoreProvider, null, children)) };
+  }
+
   function setup(togglePinItem = vi.fn().mockResolvedValue(undefined)) {
+    const { wrapper } = makeWrapper();
     return renderHook(() => {
       const listRef = useRef<HTMLDivElement | null>(null);
       return { ...usePinAnimation(togglePinItem, listRef), togglePinItem };
-    });
+    }, { wrapper });
   }
 
   it("sets liftingId immediately on handleTogglePin call", () => {
