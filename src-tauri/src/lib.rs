@@ -215,6 +215,7 @@ pub fn run() {
             commands::move_item_to_folder,
             commands::remove_item_from_folder,
             commands::install_update,
+            commands::reclamp_main_window,
             commands::activate_license_cmd,
             commands::deactivate_license_cmd,
             commands::is_activated_cmd,

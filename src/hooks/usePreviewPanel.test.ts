@@ -28,10 +28,17 @@ vi.mock("@tauri-apps/api/window", () => ({
   },
 }));
 
+// Mock Tauri invoke
+const mockInvoke = vi.fn().mockResolvedValue(undefined);
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke: (...args: unknown[]) => mockInvoke(...args),
+}));
+
 describe("usePreviewPanel", () => {
   beforeEach(() => {
     localStorage.clear();
     mockSetSize.mockClear();
+    mockInvoke.mockClear();
   });
 
   it("initialises isOpen to false when localStorage has no value", () => {
@@ -122,6 +129,54 @@ describe("usePreviewPanel", () => {
     const sizeArg = mockSetSize.mock.calls[0][0];
     expect(sizeArg.width).toBe(400);
     expect(sizeArg.height).toBe(500);
+  });
+
+  it("open() resizes window then invokes reclamp_main_window", async () => {
+    const { wrapper } = makeWrapper();
+    const { result } = renderHook(() => usePreviewPanel(), { wrapper });
+    await act(async () => {
+      result.current.open();
+      // flush microtasks so the .then(() => invoke(...)) chain runs
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(mockSetSize).toHaveBeenCalledOnce();
+    expect(mockInvoke).toHaveBeenCalledOnce();
+    expect(mockInvoke).toHaveBeenCalledWith("reclamp_main_window", { width: 400 + PANEL_WIDTH, height: 500 });
+    // setSize must be called before invoke (chained via .then)
+    const setSizeOrder = mockSetSize.mock.invocationCallOrder[0];
+    const invokeOrder = mockInvoke.mock.invocationCallOrder[0];
+    expect(setSizeOrder).toBeLessThan(invokeOrder);
+  });
+
+  it("close() resizes back without invoking reclamp_main_window", async () => {
+    const { wrapper } = makeWrapper();
+    const { result } = renderHook(() => usePreviewPanel(), { wrapper });
+    await act(async () => {
+      result.current.open();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    mockSetSize.mockClear();
+    mockInvoke.mockClear();
+    await act(async () => {
+      result.current.close();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+    expect(mockSetSize).toHaveBeenCalledOnce();
+    expect(mockInvoke).not.toHaveBeenCalled();
+  });
+
+  it("close() does nothing if already closed", async () => {
+    const { wrapper } = makeWrapper();
+    const { result } = renderHook(() => usePreviewPanel(), { wrapper });
+    await act(async () => {
+      result.current.close();
+      await Promise.resolve();
+    });
+    expect(mockSetSize).not.toHaveBeenCalled();
+    expect(mockInvoke).not.toHaveBeenCalled();
   });
 
   it("open() then close() leaves isOpen false", () => {

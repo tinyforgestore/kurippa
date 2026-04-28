@@ -109,6 +109,17 @@ pub fn pick_app_bundle(app: tauri::AppHandle) -> Result<Option<settings::Ignored
 }
 
 #[tauri::command]
+pub fn reclamp_main_window(
+    app: tauri::AppHandle,
+    width: f64,
+    height: f64,
+) -> Result<(), String> {
+    let win = app.get_webview_window("main").ok_or("no main window")?;
+    crate::window::reclamp_to_current_monitor(&app, &win, width, height);
+    Ok(())
+}
+
+#[tauri::command]
 pub async fn install_update(app: tauri::AppHandle) -> Result<(), String> {
     let state = app.state::<UpdaterState>();
     let update = state.0.lock().unwrap().take();
