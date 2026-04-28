@@ -172,6 +172,7 @@ jobs:
           gh release create "${{ inputs.tag }}" \
             --repo "${{ github.repository }}" \
             --title "Kurippa ${{ inputs.tag }}" \
+            --latest \
             --generate-notes
 
       - name: Upload artifacts and generate latest.json
@@ -206,8 +207,9 @@ jobs:
               notes:    "",
               pub_date: $pub_date,
               platforms: {
-                "darwin-universal": { signature: $macos_sig, url: $macos_url },
-                "windows-x86_64":   { signature: $win_sig,   url: $win_url }
+                "darwin-aarch64": { signature: $macos_sig, url: $macos_url },
+                "darwin-x86_64":  { signature: $macos_sig, url: $macos_url },
+                "windows-x86_64": { signature: $win_sig,   url: $win_url }
               }
             }' > latest.json
 
