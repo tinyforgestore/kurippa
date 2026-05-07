@@ -1,6 +1,7 @@
 import { useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { PasteOption } from "@/utils/pasteAs";
+import { PasteOption, strategyForOption, entryForOption } from "@/utils/pasteAs";
+import { execute } from "@/paste/executor";
 import { useAppNavigation } from "@/hooks/useAppNavigation";
 
 interface UsePasteActionsParams {
@@ -16,15 +17,14 @@ export function usePasteActions({ multiSelect, dismiss, onTrialError }: UsePaste
     const { action } = option;
     if (!action) return;
     nav.toHistory();
-    if (action.kind === "paste-image") {
-      invoke("paste_image_item", { imageFilename: action.imageFilename, itemId: action.itemId }).catch(console.error);
-    } else {
-      invoke("paste_item", {
-        text: action.text,
-        plainText: action.kind === "paste-text",
-        itemId: action.itemId,
-      }).catch(console.error);
+
+    const strategy = strategyForOption(option);
+    const entry = entryForOption(option);
+    if (!strategy || !entry) {
+      console.error("[paste] no strategy registered for option");
+      return;
     }
+    execute(entry, strategy).catch(console.error);
   }, [nav]);
 
   const onMergePaste = useCallback((separator: string) => {

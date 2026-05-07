@@ -1,6 +1,8 @@
 import { renderHook, act } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { usePasteActions } from "@/hooks/usePasteActions";
+import { getPasteOptions, type PasteOption } from "@/utils/pasteAs";
+import { ClipboardItem } from "@/types";
 
 const mockInvoke = vi.fn();
 vi.mock("@tauri-apps/api/core", () => ({ invoke: (...args: unknown[]) => mockInvoke(...args) }));
@@ -28,33 +30,59 @@ function makeMultiSelect(overrides = {}) {
   };
 }
 
+function makeItem(overrides: Partial<ClipboardItem> = {}): ClipboardItem {
+  return {
+    id: 1, kind: "text", text: "hello", html: null, rtf: null, image_path: null,
+    source_app: null, created_at: 0, pinned: false, folder_id: null,
+    qr_text: null, image_width: null, image_height: null, ...overrides,
+  };
+}
+
 describe("usePasteActions", () => {
   beforeEach(() => { vi.clearAllMocks(); mockInvoke.mockResolvedValue(undefined); });
 
   describe("executePasteOption", () => {
-    it("invokes paste_item with plainText=true for paste-text action", () => {
+    it("invokes paste_item with plainText=true for text plain option", () => {
+      const item = makeItem({ id: 1, kind: "text", text: "hello" });
+      const options = getPasteOptions(item);
+      // text.plain is the first leaf option for text entries
+      const plainOption = options[0];
       const { result } = renderHook(() => usePasteActions({ multiSelect: makeMultiSelect(), dismiss: vi.fn() }));
-      act(() => result.current.executePasteOption({
-        label: "Plain text", action: { kind: "paste-text", text: "hello", itemId: 1 },
-      }));
+      act(() => result.current.executePasteOption(plainOption));
       expect(mockInvoke).toHaveBeenCalledWith("paste_item", { text: "hello", plainText: true, itemId: 1 });
       expect(mockNav.toHistory).toHaveBeenCalledOnce();
     });
 
-    it("invokes paste_item with plainText=false for paste-as action", () => {
+    it("invokes paste_item with plainText=false for rich text option", () => {
+      const item = makeItem({ id: 2, kind: "rtf", text: "<b>hi</b>", rtf: "<b>hi</b>" });
+      const options = getPasteOptions(item);
+      // rtf strategies: rtf.rich is the first leaf
+      const richOption = options[0];
       const { result } = renderHook(() => usePasteActions({ multiSelect: makeMultiSelect(), dismiss: vi.fn() }));
-      act(() => result.current.executePasteOption({
-        label: "Rich text", action: { kind: "paste-rich", text: "<b>hi</b>", itemId: 2 },
-      }));
+      act(() => result.current.executePasteOption(richOption));
       expect(mockInvoke).toHaveBeenCalledWith("paste_item", { text: "<b>hi</b>", plainText: false, itemId: 2 });
     });
 
-    it("invokes paste_image_item for paste-image action", () => {
+    it("invokes paste_image_item for image paste option", () => {
+      const item = makeItem({ id: 3, kind: "image", text: null, image_path: "img.png" });
+      const options = getPasteOptions(item);
+      // image.paste is the first option for image entries
+      const imageOption = options[0];
       const { result } = renderHook(() => usePasteActions({ multiSelect: makeMultiSelect(), dismiss: vi.fn() }));
-      act(() => result.current.executePasteOption({
-        label: "Image", action: { kind: "paste-image", imageFilename: "img.png", itemId: 3 },
-      }));
+      act(() => result.current.executePasteOption(imageOption));
       expect(mockInvoke).toHaveBeenCalledWith("paste_image_item", { imageFilename: "img.png", itemId: 3 });
+    });
+
+    it("logs an error and does not invoke when option is not registered with a strategy", () => {
+      const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+      const syntheticOption: PasteOption = {
+        label: "Synthetic", action: { kind: "paste-text", text: "x", itemId: 99 },
+      };
+      const { result } = renderHook(() => usePasteActions({ multiSelect: makeMultiSelect(), dismiss: vi.fn() }));
+      act(() => result.current.executePasteOption(syntheticOption));
+      expect(mockInvoke).not.toHaveBeenCalled();
+      expect(consoleSpy).toHaveBeenCalledWith("[paste] no strategy registered for option");
+      consoleSpy.mockRestore();
     });
   });
 
