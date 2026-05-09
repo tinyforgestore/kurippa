@@ -89,7 +89,6 @@ pub fn read_all_formats_windows() -> Vec<(String, Vec<u8>)> {
 /// Write a set of raw format blobs back to the Windows clipboard.
 /// Returns `true` if at least one format was written successfully.
 pub fn write_all_formats_windows(formats: &[(String, Vec<u8>)]) -> bool {
-    use windows::Win32::Foundation::HWND;
     use windows::Win32::System::DataExchange::{
         CloseClipboard, EmptyClipboard, OpenClipboard, RegisterClipboardFormatA, SetClipboardData,
     };
@@ -156,7 +155,7 @@ pub fn write_all_formats_windows(formats: &[(String, Vec<u8>)]) -> bool {
                 continue;
             }
             std::ptr::copy_nonoverlapping(data.as_ptr(), ptr as *mut u8, data.len());
-            GlobalUnlock(hmem);
+            let _ = GlobalUnlock(hmem);
 
             // SetClipboardData takes ownership of hmem on success
             if SetClipboardData(fmt_id, Some(windows::Win32::Foundation::HANDLE(hmem.0))).is_ok() {

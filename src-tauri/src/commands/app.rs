@@ -68,23 +68,27 @@ pub fn set_launch_at_login(
 
 #[tauri::command]
 pub fn pick_app_bundle(app: tauri::AppHandle) -> Result<Option<settings::IgnoredApp>, String> {
-    use tauri_plugin_dialog::DialogExt;
-    let path = app
-        .dialog()
-        .file()
-        .add_filter("Applications", &["app"])
-        .set_directory("/Applications")
-        .blocking_pick_file();
-
-    let Some(path) = path else {
+    #[cfg(not(target_os = "macos"))]
+    {
+        let _ = app;
         return Ok(None);
-    };
-    let path = path.as_path().ok_or("invalid path")?;
-
-    let plist_path = path.join("Contents/Info.plist");
+    }
 
     #[cfg(target_os = "macos")]
     {
+        use tauri_plugin_dialog::DialogExt;
+        let picked = app
+            .dialog()
+            .file()
+            .add_filter("Applications", &["app"])
+            .set_directory("/Applications")
+            .blocking_pick_file();
+
+        let Some(picked) = picked else {
+            return Ok(None);
+        };
+        let path = picked.as_path().ok_or("invalid path")?;
+        let plist_path = path.join("Contents/Info.plist");
         let val: plist::Dictionary =
             plist::from_file(&plist_path).map_err(|e| e.to_string())?;
         let bundle_id = val
@@ -98,14 +102,11 @@ pub fn pick_app_bundle(app: tauri::AppHandle) -> Result<Option<settings::Ignored
             .and_then(|v| v.as_string())
             .unwrap_or(&bundle_id)
             .to_string();
-        return Ok(Some(settings::IgnoredApp {
+        Ok(Some(settings::IgnoredApp {
             bundle_id,
             display_name,
-        }));
+        }))
     }
-
-    #[cfg(not(target_os = "macos"))]
-    Ok(None)
 }
 
 #[tauri::command]

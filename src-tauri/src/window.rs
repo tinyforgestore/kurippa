@@ -1,3 +1,4 @@
+#[cfg(target_os = "macos")]
 use std::sync::atomic::{AtomicU32, Ordering};
 use tauri::{AppHandle, LogicalPosition, Manager, Monitor, WebviewWindow};
 

@@ -134,18 +134,26 @@ pub fn run() {
             }
 
             // --- Global shortcut ---
+            // macOS: Cmd+Shift+C  |  Windows/Linux: Ctrl+Alt+V
+            #[cfg(target_os = "macos")]
+            let (shortcut_mods, shortcut_key) = (Modifiers::META | Modifiers::SHIFT, Code::KeyC);
+            #[cfg(not(target_os = "macos"))]
+            let (shortcut_mods, shortcut_key) = (Modifiers::CONTROL | Modifiers::ALT, Code::KeyV);
+
             let handle = app.handle().clone();
-            app.global_shortcut().on_shortcut(
+            if let Err(e) = app.global_shortcut().on_shortcut(
                 tauri_plugin_global_shortcut::Shortcut::new(
-                    Some(Modifiers::META | Modifiers::SHIFT),
-                    Code::KeyC,
+                    Some(shortcut_mods),
+                    shortcut_key,
                 ),
                 move |_app, _shortcut, event| {
                     if event.state == ShortcutState::Pressed {
                         window::toggle_window(&handle);
                     }
                 },
-            )?;
+            ) {
+                log::warn!("[shortcut] failed to register global shortcut (already taken?): {e}");
+            }
 
             // --- Update check ---
             let app_handle = app.handle().clone();
