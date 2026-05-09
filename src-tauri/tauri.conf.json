@@ -1,7 +1,7 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
   "productName": "Kurippa",
-  "version": "1.0.18",
+  "version": "1.1.0",
   "identifier": "store.tinyforge.kurippa",
   "build": {
     "beforeDevCommand": "pnpm dev",
