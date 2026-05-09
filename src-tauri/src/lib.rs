@@ -4,6 +4,7 @@ mod db;
 mod license;
 mod paste;
 mod settings;
+mod shortcuts;
 mod window;
 
 use commands::UpdaterState;
@@ -13,7 +14,7 @@ use tauri::{
     tray::{MouseButtonState, TrayIcon, TrayIconBuilder, TrayIconEvent},
     Emitter, Manager,
 };
-use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Modifiers, ShortcutState};
+use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 use tauri_plugin_store::StoreExt;
 use tauri_plugin_updater::UpdaterExt;
 
@@ -134,17 +135,11 @@ pub fn run() {
             }
 
             // --- Global shortcut ---
-            // macOS: Cmd+Shift+C  |  Windows/Linux: Ctrl+Alt+V
-            #[cfg(target_os = "macos")]
-            let (shortcut_mods, shortcut_key) = (Modifiers::META | Modifiers::SHIFT, Code::KeyC);
-            #[cfg(not(target_os = "macos"))]
-            let (shortcut_mods, shortcut_key) = (Modifiers::CONTROL | Modifiers::ALT, Code::KeyV);
-
             let handle = app.handle().clone();
             if let Err(e) = app.global_shortcut().on_shortcut(
                 tauri_plugin_global_shortcut::Shortcut::new(
-                    Some(shortcut_mods),
-                    shortcut_key,
+                    Some(shortcuts::TOGGLE_MODS),
+                    shortcuts::TOGGLE_KEY,
                 ),
                 move |_app, _shortcut, event| {
                     if event.state == ShortcutState::Pressed {
