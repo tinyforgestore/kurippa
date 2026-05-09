@@ -4,6 +4,7 @@ import { load } from "@tauri-apps/plugin-store";
 import { openUrl } from "@tauri-apps/plugin-opener";
 import appIcon from "@/assets/icon.png";
 import { vars } from "@/theme.css";
+import { MOD_KEY, SHIFT_KEY, isMac } from "@/utils/platformKeys";
 import {
   container,
   header,
@@ -188,7 +189,7 @@ function CelebrationBody({ details }: { details: ActivationDetails }) {
 
       <div className={shortcutTeaser}>
         Press
-        <span className={shortcutKey}>⌘ ⇧ V</span>
+        <span className={shortcutKey}>{`${MOD_KEY} ${SHIFT_KEY} ${isMac ? "C" : "V"}`}</span>
         to open your clipboard
       </div>
 
