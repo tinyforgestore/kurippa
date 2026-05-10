@@ -205,6 +205,55 @@ pub fn logical_point_in_rect(lx: f64, ly: f64, rect: &Rect) -> bool {
 
 const DEFAULT_SPAWN_Y_RATIO: f64 = 0.30;
 
+/// Returns the monitor containing the cursor and the cursor's logical position on that monitor.
+///
+/// Platform notes:
+/// - macOS: `cursor_position()` returns primary-physical coords (logical × primary_scale).
+///   We divide by `primary_scale` to reach AppKit logical coords, then match against logical
+///   monitor bounds. `primary_scale` is cached in a static so detection stays correct when
+///   `available_monitors()` returns an incomplete list.
+/// - Windows/Linux: `cursor_position()` returns physical pixels. We find the monitor by
+///   physical bounds, then divide by that monitor's scale factor to get logical coords.
+fn cursor_to_logical<'a>(
+    app: &AppHandle,
+    monitors: &'a [Monitor],
+) -> Option<(&'a Monitor, f64, f64)> {
+    #[cfg(target_os = "macos")]
+    {
+        let found = monitors.iter()
+            .find(|m| { let p = m.position(); p.x == 0 && p.y == 0 })
+            .map(|m| m.scale_factor());
+        let primary_scale = if let Some(s) = found {
+            CACHED_PRIMARY_SCALE_X1000.store((s * 1000.0) as u32, Ordering::Relaxed);
+            s
+        } else {
+            let cached = CACHED_PRIMARY_SCALE_X1000.load(Ordering::Relaxed);
+            if cached > 0 { cached as f64 / 1000.0 } else { 1.0 }
+        };
+        let c = app.cursor_position().ok()?;
+        let lx = c.x / primary_scale;
+        let ly = c.y / primary_scale;
+        let m = monitors.iter().find(|m| logical_point_in_rect(lx, ly, &Rect::from(*m)))?;
+        log::info!("[position_window] primary_scale={} monitor_at_logical({:.1},{:.1}) → {:?}", primary_scale, lx, ly, m.name());
+        Some((m, lx, ly))
+    }
+
+    #[cfg(not(target_os = "macos"))]
+    {
+        let c = app.cursor_position().ok()?;
+        let m = monitors.iter().find(|m| {
+            let p = m.position();
+            let s = m.size();
+            c.x >= p.x as f64
+                && c.x < (p.x + s.width as i32) as f64
+                && c.y >= p.y as f64
+                && c.y < (p.y + s.height as i32) as f64
+        })?;
+        let scale = m.scale_factor();
+        Some((m, c.x / scale, c.y / scale))
+    }
+}
+
 /// Chooses and applies the spawn position for the popup window.
 ///
 /// All positioning uses `LogicalPosition` (AppKit points) so tao does not apply
@@ -238,60 +287,8 @@ pub fn position_window(app: &AppHandle, window: &WebviewWindow) {
         Err(_) => (DEFAULT_WIN_W as f64, DEFAULT_WIN_H as f64),
     };
 
-    // Helper: find the monitor whose PHYSICAL bounds contain (px, py) — Windows path.
-    #[cfg(not(target_os = "macos"))]
-    let monitor_at_phys = |px: f64, py: f64| -> Option<&Monitor> {
-        monitors.iter().find(|m| {
-            let p = m.position();
-            let s = m.size();
-            px >= p.x as f64
-                && px < (p.x + s.width as i32) as f64
-                && py >= p.y as f64
-                && py < (p.y + s.height as i32) as f64
-        })
-    };
-
-    // On macOS, cursor_position() returns primary-physical coords (logical × primary_scale).
-    // Monitor positions are per-monitor-physical (logical × monitor_scale).
-    // Divide cursor by primary_scale to reach AppKit logical, then test against logical
-    // monitor bounds via logical_point_in_rect.
-    //
-    // available_monitors() may return an incomplete list. Cache primary_scale in a static
-    // AtomicU32 so detection stays correct when the primary monitor is absent from the list.
-    #[cfg(target_os = "macos")]
-    let primary_scale = {
-        let found = monitors.iter()
-            .find(|m| { let p = m.position(); p.x == 0 && p.y == 0 })
-            .map(|m| m.scale_factor());
-        if let Some(s) = found {
-            CACHED_PRIMARY_SCALE_X1000.store((s * 1000.0) as u32, Ordering::Relaxed);
-            s
-        } else {
-            let cached = CACHED_PRIMARY_SCALE_X1000.load(Ordering::Relaxed);
-            if cached > 0 { cached as f64 / 1000.0 } else { 1.0 }
-        }
-    };
-    // Priority 1: spawn with window top-centre at the cursor's logical position,
-    // clamped to remain fully on the cursor's monitor.
-    #[cfg(target_os = "macos")]
-    let cursor_target = app
-        .cursor_position()
-        .ok()
-        .and_then(|c| {
-            let lx = c.x / primary_scale;
-            let ly = c.y / primary_scale;
-            let r = monitors.iter().find(|m| logical_point_in_rect(lx, ly, &Rect::from(*m)));
-            log::info!("[position_window] primary_scale={} monitor_at_logical({:.1},{:.1}) → {:?}", primary_scale, lx, ly, r.and_then(|m| m.name()));
-            r.map(|m| (m, lx, ly))
-        });
-
-    #[cfg(not(target_os = "macos"))]
-    let cursor_target = app
-        .cursor_position()
-        .ok()
-        .and_then(|c| monitor_at_phys(c.x, c.y).map(|m| (m, c.x, c.y)));
-
-    if let Some((m, cursor_lx, cursor_ly)) = cursor_target {
+    // Priority 1: spawn at the cursor's logical position, clamped to its monitor.
+    if let Some((m, cursor_lx, cursor_ly)) = cursor_to_logical(app, &monitors) {
         let (lx, ly) = clamp_to_monitor_logical(cursor_lx, cursor_ly, win_lw, win_lh, m);
         log::info!("[position_window] spawn logical=({:.1},{:.1})", lx, ly);
         let _ = window.set_position(LogicalPosition::new(lx, ly));

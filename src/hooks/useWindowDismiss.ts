@@ -11,6 +11,10 @@ export function useWindowDismiss(onShow?: () => void) {
   const setPasteAsPreviewText = useSetAtom(pasteAsPreviewTextAtom);
   const inputRef = useRef<HTMLInputElement>(null);
   const lastFocusedAt = useRef<number>(0);
+  // Suppress focus-loss dismiss while the user is dragging the window (Windows only).
+  // Clicking data-tauri-drag-region on Windows briefly fires a focus-lost event;
+  // onDragStart bumps this timestamp so we ignore that transient loss.
+  const suppressDismissUntil = useRef<number>(0);
 
   const onShowRef = useRef(onShow);
   useEffect(() => { onShowRef.current = onShow; });
@@ -21,6 +25,10 @@ export function useWindowDismiss(onShow?: () => void) {
     getCurrentWindow().hide().catch(console.error);
   }, [setQuery, setPasteAsPreviewText]);
 
+  const onDragStart = useCallback(() => {
+    suppressDismissUntil.current = Date.now() + 1000;
+  }, []);
+
   useEffect(() => {
     const unlistenFocusPromise = getCurrentWindow()
       .onFocusChanged(({ payload: focused }) => {
@@ -30,7 +38,7 @@ export function useWindowDismiss(onShow?: () => void) {
           onShowRef.current?.();
           inputRef.current?.focus();
         } else {
-          if (Date.now() - lastFocusedAt.current > 300) {
+          if (Date.now() - lastFocusedAt.current > 300 && Date.now() > suppressDismissUntil.current) {
             dismiss();
           }
         }
@@ -42,5 +50,5 @@ export function useWindowDismiss(onShow?: () => void) {
     };
   }, [dismiss, setQuery]);
 
-  return { query, setQuery, inputRef, dismiss };
+  return { query, setQuery, inputRef, dismiss, onDragStart };
 }

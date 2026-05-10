@@ -27,6 +27,7 @@ function App() {
     setQuery,
     inputRef,
     dismiss,
+    onDragStart,
     visibleEntries,
     selectedIndex,
     setSelectedIndex,
@@ -75,6 +76,7 @@ function App() {
           query={query}
           onQueryChange={setQuery}
           onDismiss={dismiss}
+          onDragStart={onDragStart}
           overlayActive={location.pathname !== "/" || multiSelect.active}
           theme={theme}
           licenseMode={mode}

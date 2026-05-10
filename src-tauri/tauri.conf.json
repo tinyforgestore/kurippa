@@ -19,7 +19,8 @@
         "visible": false,
         "resizable": false,
         "decorations": false,
-        "transparent": true
+        "transparent": true,
+        "shadow": false
       },
       {
         "label": "settings",

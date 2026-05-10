@@ -64,7 +64,7 @@ export function useAppState({ onTrialError, isActivated = false }: UseAppStatePa
 
   const inputActive = location.pathname === "/folder-name-input";
 
-  const { setQuery, inputRef, dismiss } = useWindowDismiss(() => {
+  const { setQuery, inputRef, dismiss, onDragStart } = useWindowDismiss(() => {
     resetSelectionRef.current();
     nav.toHistory();
     folderNameInputValueSetterRef.current("");
@@ -192,6 +192,7 @@ export function useAppState({ onTrialError, isActivated = false }: UseAppStatePa
     setQuery,
     inputRef,
     dismiss,
+    onDragStart,
     visibleEntries,
     selectedIndex,
     setSelectedIndex,

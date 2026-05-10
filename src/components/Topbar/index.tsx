@@ -10,17 +10,18 @@ interface TopbarProps {
   query: string;
   onQueryChange: (q: string) => void;
   onDismiss: () => void;
+  onDragStart?: () => void;
   overlayActive?: boolean;
   theme?: Theme;
   licenseMode?: LicenseMode;
   onOpenActivation?: () => void;
 }
 
-export function Topbar({ inputRef, query, onQueryChange, onDismiss, overlayActive, theme, licenseMode, onOpenActivation }: TopbarProps) {
+export function Topbar({ inputRef, query, onQueryChange, onDismiss, onDragStart, overlayActive, theme, licenseMode, onOpenActivation }: TopbarProps) {
   const icon = theme === "light" ? iconLight : iconDark;
   return (
     <div className={topbar}>
-      <img className={topbarIcon} src={icon} data-tauri-drag-region />
+      <img className={topbarIcon} src={icon} data-tauri-drag-region onMouseDown={onDragStart} />
       {licenseMode === "activated" && (
         <svg data-testid="crown-icon" className={crownIcon} width={16} height={16} viewBox="0 0 24 24" fill="none"
              stroke="currentColor" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">

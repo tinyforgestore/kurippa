@@ -40,7 +40,7 @@ describe("platformKeys", () => {
     setPlatform("Win32");
     return import("./platformKeys").then((mod) => {
       expect(mod.isMac).toBe(false);
-      expect(mod.MOD_KEY).toBe("⊞");
+      expect(mod.MOD_KEY).toBe("Win");
       expect(mod.ALT_KEY).toBe("Alt");
       expect(mod.CTRL_KEY).toBe("Ctrl");
       expect(mod.SHIFT_KEY).toBe("⇧");
@@ -51,7 +51,7 @@ describe("platformKeys", () => {
     setPlatform("Linux x86_64");
     return import("./platformKeys").then((mod) => {
       expect(mod.isMac).toBe(false);
-      expect(mod.MOD_KEY).toBe("⊞");
+      expect(mod.MOD_KEY).toBe("Win");
       expect(mod.ALT_KEY).toBe("Alt");
       expect(mod.CTRL_KEY).toBe("Ctrl");
     });

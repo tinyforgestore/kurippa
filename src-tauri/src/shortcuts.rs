@@ -6,6 +6,6 @@ pub const TOGGLE_MODS: Modifiers = Modifiers::META.union(Modifiers::SHIFT);
 pub const TOGGLE_KEY: Code = Code::KeyC;
 
 #[cfg(not(target_os = "macos"))]
-pub const TOGGLE_MODS: Modifiers = Modifiers::SUPER.union(Modifiers::SHIFT);
+pub const TOGGLE_MODS: Modifiers = Modifiers::CONTROL.union(Modifiers::SHIFT);
 #[cfg(not(target_os = "macos"))]
-pub const TOGGLE_KEY: Code = Code::KeyV;
+pub const TOGGLE_KEY: Code = Code::KeyK;
