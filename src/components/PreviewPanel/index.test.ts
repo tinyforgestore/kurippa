@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { createElement } from "react";
 import { PreviewPanel } from "@/components/PreviewPanel/index";
 import { ClipboardItem } from "@/types";
+import { flushEffects } from "@/test-utils/flushEffects";
 
 // Mock Tauri core
 const mockInvoke = vi.fn();
@@ -166,11 +167,12 @@ describe("PreviewPanel", () => {
       expect(screen.getByText(/11 chars · <1 kb/)).toBeTruthy();
     });
 
-    it("does not render char count for image items", () => {
+    it("does not render char count for image items", async () => {
       mockInvoke.mockResolvedValueOnce("/app/data/images/1.png");
       const item = makeItem({ kind: "image", text: null, image_path: "1.png" });
       render(createElement(PreviewPanel, { item }));
       expect(screen.queryByText(/chars/)).toBeNull();
+      await flushEffects();
     });
   });
 

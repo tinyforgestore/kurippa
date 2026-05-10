@@ -2,6 +2,7 @@ import { renderHook, waitFor } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { useImagePreview } from "@/hooks/useImagePreview";
 import { ClipboardItem } from "@/types";
+import { flushEffects } from "@/test-utils/flushEffects";
 
 const mockInvoke = vi.fn();
 const mockConvertFileSrc = vi.fn((path: string) => `asset://${path}`);
@@ -41,11 +42,12 @@ describe("useImagePreview", () => {
     mockInvoke.mockResolvedValue("/resolved/path.png");
   });
 
-  it("initial state: assetUrl null, failed false", () => {
+  it("initial state: assetUrl null, failed false", async () => {
     const item = makeItem(1, "folder/file.png");
     const { result } = renderHook(() => useImagePreview(item));
     expect(result.current.assetUrl).toBeNull();
     expect(result.current.failed).toBe(false);
+    await flushEffects();
   });
 
   it("image_path null → failed true immediately without invoking", () => {

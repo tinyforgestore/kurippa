@@ -4,6 +4,7 @@ import { MemoryRouter } from "react-router-dom";
 import { Provider, createStore } from "jotai";
 import { StoreProvider } from "@/store";
 import App from "@/components/App";
+import { flushEffects } from "@/test-utils/flushEffects";
 
 // ---------------------------------------------------------------------------
 // Tauri API mocks
@@ -128,11 +129,12 @@ describe("App — dismiss behaviour", () => {
     capturedFocusCallback = null;
   });
 
-  it("renders the search input with autoFocus", () => {
+  it("renders the search input with autoFocus", async () => {
     renderApp();
     const input = screen.getByPlaceholderText("Search...");
     expect(input).toBeInTheDocument();
     expect(input).toHaveFocus();
+    await flushEffects();
   });
 
   it("calls hide() and clears query when Escape is pressed on the input", async () => {
@@ -160,7 +162,7 @@ describe("App — dismiss behaviour", () => {
     expect(input).toHaveValue("");
   });
 
-  it("does NOT call hide() for non-Escape keys on the input", () => {
+  it("does NOT call hide() for non-Escape keys on the input", async () => {
     renderApp();
     const input = screen.getByPlaceholderText("Search...");
 
@@ -168,14 +170,16 @@ describe("App — dismiss behaviour", () => {
     fireEvent.keyDown(input, { key: "a" });
 
     expect(mockHide).not.toHaveBeenCalled();
+    await flushEffects();
   });
 
-  it("does NOT call hide() for non-Escape keys on the document", () => {
+  it("does NOT call hide() for non-Escape keys on the document", async () => {
     renderApp();
 
     fireEvent.keyDown(document, { key: "ArrowDown" });
 
     expect(mockHide).not.toHaveBeenCalled();
+    await flushEffects();
   });
 
   it("removes the document keydown listener on unmount", () => {
@@ -820,9 +824,10 @@ describe("App — first_launch mode", () => {
     mockLicenseMode = "trial";
   });
 
-  it("renders null (no search input) when mode is first_launch", () => {
+  it("renders null (no search input) when mode is first_launch", async () => {
     renderApp();
     expect(screen.queryByPlaceholderText("Search...")).toBeNull();
+    await flushEffects();
   });
 });
 

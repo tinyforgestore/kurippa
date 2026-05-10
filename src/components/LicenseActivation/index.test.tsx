@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from "@testing-library/react";
+import { render, screen, fireEvent, act } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { createElement } from "react";
 import { LicenseActivation } from "@/components/LicenseActivation/index";
@@ -106,21 +106,25 @@ describe("LicenseActivation", () => {
   });
 
   describe("activation success", () => {
-    it("calls activate_license_cmd with trimmed key on button click", () => {
+    it("calls activate_license_cmd with trimmed key on button click", async () => {
       mockInvoke.mockResolvedValue(undefined);
       renderComponent();
       const input = screen.getByPlaceholderText("XXXX-XXXX-XXXX-XXXX");
       fireEvent.change(input, { target: { value: "  ABCD-1234  " } });
-      fireEvent.click(screen.getByRole("button", { name: /activate kurippa/i }));
+      await act(async () => {
+        fireEvent.click(screen.getByRole("button", { name: /activate kurippa/i }));
+      });
       expect(mockInvoke).toHaveBeenCalledWith("activate_license_cmd", { key: "ABCD-1234" });
     });
 
-    it("calls activate_license_cmd on Enter key press", () => {
+    it("calls activate_license_cmd on Enter key press", async () => {
       mockInvoke.mockResolvedValue(undefined);
       renderComponent();
       const input = screen.getByPlaceholderText("XXXX-XXXX-XXXX-XXXX");
       fireEvent.change(input, { target: { value: "KEY" } });
-      fireEvent.keyDown(input, { key: "Enter" });
+      await act(async () => {
+        fireEvent.keyDown(input, { key: "Enter" });
+      });
       expect(mockInvoke).toHaveBeenCalledWith("activate_license_cmd", { key: "KEY" });
     });
   });
@@ -175,10 +179,12 @@ describe("LicenseActivation", () => {
   });
 
   describe("free trial", () => {
-    it("calls set_free_trial_cmd when Free trial is clicked", () => {
+    it("calls set_free_trial_cmd when Free trial is clicked", async () => {
       mockInvoke.mockResolvedValue(undefined);
       renderComponent();
-      fireEvent.click(screen.getByRole("button", { name: /^free trial$/i }));
+      await act(async () => {
+        fireEvent.click(screen.getByRole("button", { name: /^free trial$/i }));
+      });
       expect(mockInvoke).toHaveBeenCalledWith("set_free_trial_cmd");
     });
   });

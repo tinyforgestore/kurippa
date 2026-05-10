@@ -5,6 +5,7 @@ import { MemoryRouter } from "react-router-dom";
 import { Provider, createStore } from "jotai";
 import { StoreProvider } from "@/store";
 import { useAppState } from "@/hooks/useAppState";
+import { flushEffects } from "@/test-utils/flushEffects";
 
 // ---------------------------------------------------------------------------
 // Module mocks
@@ -99,10 +100,11 @@ describe("useAppState — own logic", () => {
     setupMocks();
   });
 
-  it("initial updateInfo is null", () => {
+  it("initial updateInfo is null", async () => {
     const { wrapper } = makeWrapper();
     const { result } = renderHook(() => useAppState(), { wrapper });
     expect(result.current.updateInfo).toBeNull();
+    await flushEffects();
   });
 
   it("update-available event with new version sets updateInfo", async () => {
@@ -140,9 +142,10 @@ describe("useAppState — own logic", () => {
     await waitFor(() => expect(mockInvoke).toHaveBeenCalledWith("install_update"));
   });
 
-  it("onCancelSeparator is a function", () => {
+  it("onCancelSeparator is a function", async () => {
     const { wrapper } = makeWrapper();
     const { result } = renderHook(() => useAppState(), { wrapper });
     expect(typeof result.current.onCancelSeparator).toBe("function");
+    await flushEffects();
   });
 });
