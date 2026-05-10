@@ -225,6 +225,7 @@ describe("App — dismiss behaviour", () => {
 
     renderApp();
     await waitFor(() => expect(screen.getByText("rich text item")).toBeInTheDocument());
+    await act(async () => {}); // flush effects so useItemSelection's keydown listener is current
 
     // Open the Paste As menu
     await act(async () => { fireEvent.keyDown(document, { key: "Enter", shiftKey: true }); });
@@ -450,6 +451,7 @@ describe("App — keyboard navigation", () => {
 
     renderApp();
     await waitFor(() => expect(screen.getByText("rich text item")).toBeInTheDocument());
+    await act(async () => {}); // flush effects so useItemSelection's keydown listener is current
 
     await act(async () => { fireEvent.keyDown(document, { key: "Enter", shiftKey: true }); });
 
@@ -620,6 +622,7 @@ describe("App — keyboard navigation", () => {
 
     renderApp();
     await waitFor(() => expect(screen.getByText("hello")).toBeInTheDocument());
+    await act(async () => {}); // flush effects so useItemSelection's keydown listener is current
 
     // Open Paste As menu
     await act(async () => { fireEvent.keyDown(document, { key: "Enter", shiftKey: true }); });
@@ -659,6 +662,7 @@ describe("App — keyboard navigation", () => {
 
     renderApp();
     await waitFor(() => expect(document.querySelector("[data-item]")).toBeInTheDocument());
+    await act(async () => {}); // flush effects so useItemSelection's keydown listener is current
 
     // Open Paste As menu
     await act(async () => { fireEvent.keyDown(document, { key: "Enter", shiftKey: true }); });
