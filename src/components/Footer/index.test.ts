@@ -1,5 +1,5 @@
 import { render, screen, fireEvent } from "@testing-library/react";
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { createElement } from "react";
 import { Footer } from "@/components/Footer/index";
 
@@ -108,6 +108,62 @@ describe("Footer", () => {
       render(createElement(Footer, makeProps({ showConfirm: true, onConfirmClear })));
       fireEvent.click(screen.getByText("Clear"));
       expect(mockInvoke).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("platform-specific shortcut hints", () => {
+    const originalPlatform = Object.getOwnPropertyDescriptor(
+      window.navigator,
+      "platform"
+    );
+
+    function setPlatform(value: string) {
+      Object.defineProperty(window.navigator, "platform", {
+        configurable: true,
+        get: () => value,
+      });
+    }
+
+    beforeEach(() => {
+      vi.resetModules();
+    });
+
+    afterEach(() => {
+      if (originalPlatform) {
+        Object.defineProperty(window.navigator, "platform", originalPlatform);
+      }
+    });
+
+    it("renders shortcut hints on macOS", async () => {
+      setPlatform("MacIntel");
+      const { Footer: MacFooter } = await import("@/components/Footer/index");
+      render(createElement(MacFooter, makeProps()));
+      expect(screen.getByText("⌘,")).toBeTruthy();
+      expect(screen.getByText("⌥⌘⌫")).toBeTruthy();
+      expect(screen.getByText("⌘Q")).toBeTruthy();
+    });
+
+    it("hides shortcut hints on Windows", async () => {
+      setPlatform("Win32");
+      const { Footer: WinFooter } = await import("@/components/Footer/index");
+      render(createElement(WinFooter, makeProps()));
+      expect(screen.queryByText("Ctrl+,")).toBeNull();
+      expect(screen.queryByText("Alt+Ctrl+Backspace")).toBeNull();
+      expect(screen.queryByText("Ctrl+Q")).toBeNull();
+      // Action labels still visible
+      expect(screen.getByText("Settings")).toBeTruthy();
+      expect(screen.getByText("Clear")).toBeTruthy();
+      expect(screen.getByText("Quit")).toBeTruthy();
+    });
+
+    it("hides shortcut hints on Linux", async () => {
+      setPlatform("Linux x86_64");
+      const { Footer: LinuxFooter } = await import("@/components/Footer/index");
+      render(createElement(LinuxFooter, makeProps()));
+      expect(screen.queryByText("Ctrl+,")).toBeNull();
+      expect(screen.queryByText("Alt+Ctrl+Backspace")).toBeNull();
+      expect(screen.queryByText("Ctrl+Q")).toBeNull();
+      expect(screen.getByText("Settings")).toBeTruthy();
     });
   });
 });
