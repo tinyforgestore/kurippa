@@ -5,11 +5,10 @@ import {
   SHIFT_KEY,
   BACKSPACE_KEY,
   ENTER_KEY,
-  isMac,
 } from "@/utils/platformKeys";
+import { GLOBAL_HOTKEY_KEYS } from "@/utils/globalShortcut";
 
 export function HotkeysTab() {
-  const globalKey = isMac ? "C" : "V";
   return (
     <>
       <div className={sectionTitle}>Hotkeys</div>
@@ -17,7 +16,7 @@ export function HotkeysTab() {
         <div className={rowLabel} style={{ marginBottom: 10 }}>
           Global
         </div>
-        <KbdRow action="Open Kurippa" keys={[MOD_KEY, SHIFT_KEY, globalKey]} />
+        <KbdRow action="Open Kurippa" keys={GLOBAL_HOTKEY_KEYS} />
       </div>
       <div className={divider} />
       <div className={kbdSection}>

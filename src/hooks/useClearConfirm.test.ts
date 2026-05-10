@@ -60,6 +60,13 @@ describe("useClearConfirm", () => {
     expect(result.current.show).toBe(true);
   });
 
+  it("Ctrl+Alt+Backspace sets show to true", () => {
+    const { wrapper } = makeWrapper();
+    const { result } = renderHook(() => useClearConfirm({ clearNonPinned: vi.fn() }), { wrapper });
+    act(() => fireKey("Backspace", { ctrlKey: true, altKey: true }));
+    expect(result.current.show).toBe(true);
+  });
+
   it("Escape hides confirm when visible", () => {
     const { wrapper } = makeWrapper();
     const { result } = renderHook(() => useClearConfirm({ clearNonPinned: vi.fn() }), { wrapper });

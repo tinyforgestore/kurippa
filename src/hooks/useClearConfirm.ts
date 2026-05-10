@@ -21,7 +21,7 @@ export function useClearConfirm({ clearNonPinned }: UseClearConfirmParams): Clea
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Backspace" && e.metaKey && e.altKey) {
+      if (e.key === "Backspace" && (e.metaKey || e.ctrlKey) && e.altKey) {
         e.preventDefault();
         setShow(true);
       }
