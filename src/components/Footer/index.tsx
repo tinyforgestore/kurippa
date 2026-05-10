@@ -1,6 +1,6 @@
 import { Settings, Trash2, X } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
-import { MOD_KEY, ALT_KEY, BACKSPACE_KEY } from "@/utils/platformKeys";
+import { MOD_KEY, ALT_KEY, BACKSPACE_KEY, combo } from "@/utils/platformKeys";
 import {
   confirmCancelButton,
   confirmLabel,
@@ -40,13 +40,13 @@ export function Footer({ showConfirm, onRequestClear, onConfirmClear, onCancelCl
           >
             <Settings size={11} />
             <span>Settings</span>
-            <span className={footerHint}>{`${MOD_KEY},`}</span>
+            <span className={footerHint}>{combo(MOD_KEY, ",")}</span>
           </button>
           <div className={footerDivider} />
           <button className={footerButton} onClick={onRequestClear}>
             <Trash2 size={11} />
             <span>Clear</span>
-            <span className={footerHint}>{`${ALT_KEY}${MOD_KEY}${BACKSPACE_KEY}`}</span>
+            <span className={footerHint}>{combo(ALT_KEY, MOD_KEY, BACKSPACE_KEY)}</span>
           </button>
           <div className={footerDivider} />
           <button
@@ -55,7 +55,7 @@ export function Footer({ showConfirm, onRequestClear, onConfirmClear, onCancelCl
           >
             <X size={11} />
             <span>Quit</span>
-            <span className={footerHint}>{`${MOD_KEY}Q`}</span>
+            <span className={footerHint}>{combo(MOD_KEY, "Q")}</span>
           </button>
         </>
       )}

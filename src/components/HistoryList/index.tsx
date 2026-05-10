@@ -4,11 +4,11 @@ import { EntryItem } from "@/components/HistoryList/EntryItem";
 import { FolderHeader } from "@/components/HistoryList/FolderHeader";
 import { PinnedHeader } from "@/components/HistoryList/PinnedHeader";
 import { list } from "@/components/HistoryList/index.css";
-import { MOD_KEY } from "@/utils/platformKeys";
+import { MOD_KEY, combo } from "@/utils/platformKeys";
 
 function shortcutLabel(index: number): string | null {
   if (index > 9) return null;
-  return `${MOD_KEY}${index}`;
+  return combo(MOD_KEY, String(index));
 }
 
 interface HistoryListProps {

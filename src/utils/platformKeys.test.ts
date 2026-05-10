@@ -44,6 +44,7 @@ describe("platformKeys", () => {
       expect(mod.ALT_KEY).toBe("Alt");
       expect(mod.CTRL_KEY).toBe("Ctrl");
       expect(mod.SHIFT_KEY).toBe("⇧");
+      expect(mod.BACKSPACE_KEY).toBe("Backspace");
     });
   });
 
@@ -54,6 +55,27 @@ describe("platformKeys", () => {
       expect(mod.MOD_KEY).toBe("Ctrl");
       expect(mod.ALT_KEY).toBe("Alt");
       expect(mod.CTRL_KEY).toBe("Ctrl");
+      expect(mod.BACKSPACE_KEY).toBe("Backspace");
+    });
+  });
+
+  describe("combo()", () => {
+    it("joins keys with no separator on macOS", () => {
+      setPlatform("MacIntel");
+      return import("./platformKeys").then((mod) => {
+        expect(mod.combo("⌘", "P")).toBe("⌘P");
+        expect(mod.combo(mod.ALT_KEY, mod.MOD_KEY, mod.BACKSPACE_KEY)).toBe("⌥⌘⌫");
+      });
+    });
+
+    it("joins keys with '+' on Win32", () => {
+      setPlatform("Win32");
+      return import("./platformKeys").then((mod) => {
+        expect(mod.combo("Ctrl", "P")).toBe("Ctrl+P");
+        expect(mod.combo(mod.ALT_KEY, mod.MOD_KEY, mod.BACKSPACE_KEY)).toBe(
+          "Alt+Ctrl+Backspace"
+        );
+      });
     });
   });
 });
