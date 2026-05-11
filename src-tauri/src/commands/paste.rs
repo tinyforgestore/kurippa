@@ -1,6 +1,6 @@
-use super::history::is_safe_image_filename;
-use crate::clipboard;
-use crate::db::{self, DbState};
+use crate::clipboard::{self, image::{is_safe_image_filename, IMAGES_DIR}};
+use crate::events;
+use crate::db::{self, kind, DbState};
 use crate::license;
 use crate::paste;
 use tauri::{Emitter, Manager};
@@ -20,7 +20,7 @@ fn touch_and_emit(
             db::touch_item(&conn, id, now).ok()
         };
         if let Some(item) = updated {
-            let _ = app.emit("clipboard-updated", &item);
+            let _ = app.emit(events::CLIPBOARD_UPDATED, &item);
         }
     }
     Ok(())
@@ -54,7 +54,7 @@ pub fn paste_image_item(
         .path()
         .app_data_dir()
         .map_err(|e| e.to_string())?
-        .join("images");
+        .join(IMAGES_DIR);
 
     let full_path = images_dir.join(&image_filename);
     if !full_path.starts_with(&images_dir) {
@@ -137,7 +137,7 @@ pub fn merge_and_paste_items(
     separator: String,
 ) -> Result<(), String> {
     if !license::is_activated(&app) {
-        return Err("trial".into());
+        return Err(license::TRIAL_ERROR.into());
     }
     let texts = {
         let conn = db.lock().map_err(|e| e.to_string())?;
@@ -158,7 +158,7 @@ pub fn merge_and_paste_items(
         let conn = db.lock().map_err(|e| e.to_string())?;
         let new_item = db::ClipboardItem {
             id: 0,
-            kind: "text".to_string(),
+            kind: kind::TEXT.to_string(),
             text: Some(merged.clone()),
             html: None, rtf: None, image_path: None, source_app: None,
             created_at: clipboard::unix_now(),
@@ -166,7 +166,7 @@ pub fn merge_and_paste_items(
             image_width: None, image_height: None,
         };
         let (new_id, _) = db::insert_item(&conn, &new_item).map_err(|e| e.to_string())?;
-        let _ = app.emit("clipboard-updated", db::ClipboardItem { id: new_id, ..new_item });
+        let _ = app.emit(events::CLIPBOARD_UPDATED, db::ClipboardItem { id: new_id, ..new_item });
     }
 
     {

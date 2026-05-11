@@ -1,5 +1,5 @@
 mod hash;
-mod image;
+pub mod image;
 pub mod platform;
 mod poller;
 mod skip;

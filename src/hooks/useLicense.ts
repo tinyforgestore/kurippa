@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { load } from "@tauri-apps/plugin-store";
+import { LICENSE_STATE_CHANGED } from "@/constants/events";
 
 export type LicenseMode = "activated" | "trial" | "first_launch" | "device_limit";
 
@@ -64,7 +65,7 @@ export function useLicense(): UseLicenseReturn {
     let unlisten: (() => void) | null = null;
     let mounted = true;
     import("@tauri-apps/api/event")
-      .then(({ listen }) => listen("license-state-changed", () => checkLicense()))
+      .then(({ listen }) => listen(LICENSE_STATE_CHANGED, () => checkLicense()))
       .then((fn) => {
         if (!mounted) { fn(); return; }
         unlisten = fn;

@@ -2,6 +2,7 @@ import { useCallback } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { PasteOption, strategyForOption, entryForOption } from "@/utils/pasteAs";
 import { execute } from "@/paste/executor";
+import { TRIAL_ERROR } from "@/constants/errors";
 import { useAppNavigation } from "@/hooks/useAppNavigation";
 
 interface UsePasteActionsParams {
@@ -38,7 +39,7 @@ export function usePasteActions({ multiSelect, dismiss, onTrialError }: UsePaste
         dismiss();
       })
       .catch((err: string) => {
-        if (err === "trial") {
+        if (err === TRIAL_ERROR) {
           onTrialError?.("Multi-paste");
         } else {
           console.error(err);

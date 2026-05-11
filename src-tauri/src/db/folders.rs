@@ -2,6 +2,13 @@ use rusqlite::{Connection, Result, params};
 
 use super::types::Folder;
 
+/// Maximum number of folders a user can create.
+pub const MAX_FOLDERS: i64 = 10;
+
+/// Error string returned by create_folder when the user is at the limit.
+/// Must stay in sync with the literal checked in src/constants/errors.ts.
+pub const MAX_FOLDERS_REACHED_ERROR: &str = "max_folders_reached";
+
 pub fn get_folders(conn: &Connection) -> Result<Vec<Folder>> {
     let mut stmt = conn.prepare(
         "SELECT id, name, created_at, position FROM folders ORDER BY position ASC, id ASC",
@@ -75,7 +82,7 @@ pub fn remove_item_from_folder(conn: &Connection, item_id: i64) -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::db::{insert_item, types::ClipboardItem};
+    use crate::db::{insert_item, kind, types::ClipboardItem};
 
     fn in_memory_db() -> Connection {
         crate::db::open(std::path::Path::new(":memory:"))
@@ -85,7 +92,7 @@ mod tests {
     fn make_item(text: &str, created_at: i64) -> ClipboardItem {
         ClipboardItem {
             id: 0,
-            kind: "text".to_string(),
+            kind: kind::TEXT.to_string(),
             text: Some(text.to_string()),
             html: None,
             rtf: None,

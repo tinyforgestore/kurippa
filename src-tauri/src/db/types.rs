@@ -1,5 +1,13 @@
 use serde::{Deserialize, Serialize};
 
+/// Allowed values of `ClipboardItem::kind`. Keep in sync with the TypeScript
+/// union in `src/types.ts`.
+pub mod kind {
+    pub const IMAGE: &str = "image";
+    pub const TEXT: &str = "text";
+    pub const RTF: &str = "rtf";
+}
+
 /// Mirrors the `items` table row.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct ClipboardItem {

@@ -10,7 +10,7 @@ fn in_memory_db() -> rusqlite::Connection {
 fn make_item(text: &str, created_at: i64, pinned: bool) -> ClipboardItem {
     ClipboardItem {
         id: 0,
-        kind: "text".to_string(),
+        kind: kind::TEXT.to_string(),
         text: Some(text.to_string()),
         html: None,
         rtf: None,

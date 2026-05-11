@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { usePasteActions } from "@/hooks/usePasteActions";
 import { getPasteOptions, type PasteOption } from "@/utils/pasteAs";
 import { ClipboardItem } from "@/types";
+import { TRIAL_ERROR } from "@/constants/errors";
 
 const mockInvoke = vi.fn();
 vi.mock("@tauri-apps/api/core", () => ({ invoke: (...args: unknown[]) => mockInvoke(...args) }));
@@ -99,7 +100,7 @@ describe("usePasteActions", () => {
     });
 
     it("calls onTrialError with 'Multi-paste' when error is 'trial'", async () => {
-      mockInvoke.mockRejectedValueOnce("trial");
+      mockInvoke.mockRejectedValueOnce(TRIAL_ERROR);
       const dismiss = vi.fn();
       const onTrialError = vi.fn();
       const multiSelect = makeMultiSelect({ selections: [1, 2] });
@@ -125,7 +126,7 @@ describe("usePasteActions", () => {
     });
 
     it("does not call toHistory or dismiss when merge fails", async () => {
-      mockInvoke.mockRejectedValueOnce("trial");
+      mockInvoke.mockRejectedValueOnce(TRIAL_ERROR);
       const dismiss = vi.fn();
       const onTrialError = vi.fn();
       const multiSelect = makeMultiSelect({ selections: [1] });

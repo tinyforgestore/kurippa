@@ -1,5 +1,6 @@
-use super::history::is_safe_image_filename;
+use crate::clipboard::image;
 use crate::db::{self, DbState};
+use crate::events;
 use crate::settings;
 use std::sync::Mutex;
 use tauri::{Emitter, Manager};
@@ -24,17 +25,8 @@ pub fn clear_history(
         let conn = state.lock().map_err(|e| e.to_string())?;
         db::clear_history(&conn).map_err(|e| e.to_string())?
     };
-    if let Ok(images_dir) = app.path().app_data_dir().map(|d| d.join("images")) {
-        for filename in &image_paths {
-            if is_safe_image_filename(filename) {
-                let full_path = images_dir.join(filename);
-                if full_path.starts_with(&images_dir) && full_path.exists() {
-                    let _ = std::fs::remove_file(&full_path);
-                }
-            }
-        }
-    }
-    let _ = app.emit("history-cleared", ());
+    image::cleanup_image_files(&app, &image_paths);
+    let _ = app.emit(events::HISTORY_CLEARED, ());
     Ok(())
 }
 

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { renderHook, act } from "@testing-library/react";
 import { useLicense } from "@/hooks/useLicense";
+import { LICENSE_STATE_CHANGED } from "@/constants/events";
 
 const mockInvoke = vi.fn();
 const mockStoreGet = vi.fn();
@@ -294,7 +295,7 @@ describe("useLicense", () => {
       const { unmount } = renderHook(() => useLicense());
       await act(async () => {});
 
-      expect(mockListen).toHaveBeenCalledWith("license-state-changed", expect.any(Function));
+      expect(mockListen).toHaveBeenCalledWith(LICENSE_STATE_CHANGED, expect.any(Function));
       // Clean up
       unmount();
     });

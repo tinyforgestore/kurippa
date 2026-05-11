@@ -5,6 +5,7 @@ import { listen } from "@tauri-apps/api/event";
 import { error as logError, info as logInfo } from "@tauri-apps/plugin-log";
 import { ClipboardItem, HISTORY_DISPLAY_LIMIT } from "@/types";
 import { allItemsAtom } from "@/atoms/clipboard";
+import { CLIPBOARD_UPDATED, HISTORY_CLEARED } from "@/constants/events";
 import { useClipboardStore } from "@/store";
 
 export function useClipboardHistory() {
@@ -19,12 +20,12 @@ export function useClipboardHistory() {
       })
       .catch(console.error);
 
-    const unlistenPromise = listen<ClipboardItem>("clipboard-updated", (event) => {
+    const unlistenPromise = listen<ClipboardItem>(CLIPBOARD_UPDATED, (event) => {
       if (Date.now() < ignoringClipboardUpdatesUntil.current) return;
       setAllItems((prev) => [event.payload, ...prev.filter((i) => i.id !== event.payload.id)].slice(0, HISTORY_DISPLAY_LIMIT));
     });
 
-    const unlistenClearedPromise = listen("history-cleared", () => {
+    const unlistenClearedPromise = listen(HISTORY_CLEARED, () => {
       ignoringClipboardUpdatesUntil.current = Date.now() + 600;
       setAllItems((prev) => prev.filter((i) => i.pinned || i.folder_id !== null));
     });

@@ -1,4 +1,4 @@
-use crate::license;
+use crate::{events, license};
 use tauri::{Emitter, Manager};
 use tauri_plugin_store::StoreExt;
 
@@ -24,7 +24,7 @@ pub async fn finish_activation_cmd(app: tauri::AppHandle) -> Result<(), String> 
     store.set("just_activated", serde_json::Value::Bool(true));
     store.save().map_err(|e| e.to_string())?;
 
-    app.emit("license-state-changed", ()).ok();
+    app.emit(events::LICENSE_STATE_CHANGED, ()).ok();
 
     if let Some(win) = app.get_webview_window("activation") {
         let _ = win.hide();
@@ -54,7 +54,7 @@ pub async fn deactivate_license_cmd(app: tauri::AppHandle) -> Result<(), String>
     store.delete("license_revoked");
     store.save().map_err(|e| e.to_string())?;
 
-    app.emit("license-state-changed", ()).ok();
+    app.emit(events::LICENSE_STATE_CHANGED, ()).ok();
 
     Ok(())
 }

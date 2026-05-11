@@ -5,6 +5,7 @@ import { MemoryRouter } from "react-router-dom";
 import { Provider, createStore } from "jotai";
 import { StoreProvider } from "@/store";
 import { useAppState } from "@/hooks/useAppState";
+import { UPDATE_AVAILABLE } from "@/constants/events";
 import { flushEffects } from "@/test-utils/flushEffects";
 
 // ---------------------------------------------------------------------------
@@ -77,7 +78,7 @@ function setupMocks() {
   });
 
   mockListen.mockImplementation((event: string, cb: (e: { payload: string }) => void) => {
-    if (event === "update-available") capturedUpdateListener = cb;
+    if (event === UPDATE_AVAILABLE) capturedUpdateListener = cb;
     return Promise.resolve(mockUnlisten);
   });
 }

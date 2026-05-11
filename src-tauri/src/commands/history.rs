@@ -1,30 +1,7 @@
+use crate::clipboard::image::{is_safe_image_filename, IMAGES_DIR};
 use crate::db::{self, DbState};
 use crate::license;
 use tauri::Manager;
-
-/// Returns true iff `filename` is safe to use as an image file path component.
-///
-/// Rejects strings that contain path separators or null bytes, do not end with
-/// `.png`, or match a Windows reserved device name (e.g. `NUL.png`, `CON.png`).
-pub(super) fn is_safe_image_filename(filename: &str) -> bool {
-    if filename.contains('/') || filename.contains('\\') || filename.contains('\0') {
-        return false;
-    }
-    if !filename.ends_with(".png") {
-        return false;
-    }
-    // Reject Windows reserved device names (e.g. NUL.png, CON.png).
-    let stem = filename.trim_end_matches(".png").to_uppercase();
-    let reserved = [
-        "CON", "PRN", "AUX", "NUL",
-        "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
-        "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
-    ];
-    if reserved.contains(&stem.as_str()) {
-        return false;
-    }
-    true
-}
 
 #[tauri::command]
 pub fn get_history(
@@ -71,11 +48,11 @@ pub fn delete_item(
                 .path()
                 .app_data_dir()
                 .map_err(|e| e.to_string())?
-                .join("images");
+                .join(IMAGES_DIR);
             let full_path = images_dir.join(filename);
             // Confirm the resolved path is still inside images_dir.
             if !full_path.starts_with(&images_dir) {
-                eprintln!("[delete_item] path escape detected for filename {filename:?}; skipping deletion");
+                log::warn!("[delete_item] path escape detected for filename {filename:?}; skipping deletion");
             } else if full_path.exists() {
                 std::fs::remove_file(&full_path).map_err(|e| e.to_string())?;
             }
@@ -96,7 +73,7 @@ pub fn get_image_path(app: tauri::AppHandle, filename: String) -> Result<String,
         .path()
         .app_data_dir()
         .map_err(|e| e.to_string())?
-        .join("images");
+        .join(IMAGES_DIR);
     let full_path = images_dir.join(&filename);
     if !full_path.starts_with(&images_dir) {
         return Err("path traversal denied".to_string());

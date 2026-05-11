@@ -26,7 +26,7 @@ pub fn simulate_paste() {
     let source = match CGEventSource::new(CGEventSourceStateID::HIDSystemState) {
         Ok(s) => s,
         Err(_) => {
-            eprintln!("[paste] failed to create CGEventSource");
+            log::error!("[paste] failed to create CGEventSource");
             return;
         }
     };
@@ -36,7 +36,7 @@ pub fn simulate_paste() {
     let down = match CGEvent::new_keyboard_event(source.clone(), key_v, true) {
         Ok(e) => e,
         Err(_) => {
-            eprintln!("[paste] failed to create key-down CGEvent");
+            log::error!("[paste] failed to create key-down CGEvent");
             return;
         }
     };
@@ -47,7 +47,7 @@ pub fn simulate_paste() {
     let up = match CGEvent::new_keyboard_event(source, key_v, false) {
         Ok(e) => e,
         Err(_) => {
-            eprintln!("[paste] failed to create key-up CGEvent");
+            log::error!("[paste] failed to create key-up CGEvent");
             return;
         }
     };
@@ -126,7 +126,7 @@ pub fn simulate_paste() {
 
         let result = SendInput(&inputs, std::mem::size_of::<INPUT>() as i32);
         if result != inputs.len() as u32 {
-            eprintln!("[paste] SendInput sent fewer events than expected");
+            log::warn!("[paste] SendInput sent fewer events than expected");
         }
     }
 }
@@ -137,5 +137,5 @@ pub fn simulate_paste() {
 
 #[cfg(not(any(target_os = "macos", target_os = "windows")))]
 pub fn simulate_paste() {
-    eprintln!("[paste] paste simulation not supported on this platform");
+    log::error!("[paste] paste simulation not supported on this platform");
 }

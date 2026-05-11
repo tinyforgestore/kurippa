@@ -3,6 +3,7 @@ import { useSetAtom } from "jotai";
 import { useLocation } from "react-router-dom";
 import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
+import { UPDATE_AVAILABLE } from "@/constants/events";
 import { useClipboardHistory } from "@/hooks/useClipboardHistory";
 import { useWindowDismiss } from "@/hooks/useWindowDismiss";
 import { useItemSelection } from "@/hooks/useItemSelection";
@@ -129,7 +130,7 @@ export function useAppState({ onTrialError, isActivated = false }: UseAppStatePa
 
   useEffect(() => {
     let unlisten: (() => void) | null = null;
-    listen<string>("update-available", (event) => {
+    listen<string>(UPDATE_AVAILABLE, (event) => {
       const version = event.payload;
       const dismissed = localStorage.getItem("dismissed_update_version");
       if (dismissed !== version) {

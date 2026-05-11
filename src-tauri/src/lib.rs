@@ -1,6 +1,7 @@
 mod clipboard;
 mod commands;
 mod db;
+mod events;
 mod license;
 mod paste;
 mod settings;
@@ -160,7 +161,7 @@ pub fn run() {
                                 let version = update.version.clone();
                                 let state = app_handle.state::<UpdaterState>();
                                 *state.0.lock().unwrap() = Some(update);
-                                let _ = app_handle.emit("update-available", version);
+                                let _ = app_handle.emit(events::UPDATE_AVAILABLE, version);
                             }
                             Ok(None) => {}
                             Err(e) => log::warn!("[updater] check failed: {e}"),

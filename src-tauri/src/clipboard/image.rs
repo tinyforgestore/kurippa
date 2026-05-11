@@ -46,7 +46,7 @@ pub fn prepare_image_from_path(
     let images_dir = app
         .path()
         .app_data_dir()
-        .map(|d| d.join("images"))
+        .map(|d| d.join(IMAGES_DIR))
         .ok()?;
 
     let _ = std::fs::create_dir_all(&images_dir);
@@ -102,7 +102,7 @@ pub fn prepare_image(
     let images_dir = app
         .path()
         .app_data_dir()
-        .map(|d| d.join("images"))
+        .map(|d| d.join(IMAGES_DIR))
         .ok()?;
 
     let _ = std::fs::create_dir_all(&images_dir);
@@ -163,29 +163,121 @@ pub fn finalize_image(
     }
 }
 
-/// Returns true if `name` is a safe image filename: no path separators, no null
-/// bytes, and must end with the `.png` extension.
-fn is_safe_image_filename(name: &str) -> bool {
-    !name.is_empty()
-        && !name.contains('/')
-        && !name.contains('\\')
-        && !name.contains('\0')
-        && name.ends_with(".png")
+/// A successfully finalized image, optionally with QR-decoded text.
+pub struct FinalizedImage {
+    pub final_filename: String,
+    pub qr_text: Option<String>,
 }
 
-/// Deletes evicted image files from the images directory.
-pub fn cleanup_evicted(app: &tauri::AppHandle, filenames: &[String]) {
+/// Outcome of `finalize_with_optional_qr`. On error variants, callers are
+/// responsible for cleaning up the temp/final file and deleting the orphaned row.
+pub enum FinalizeWithQrOutcome {
+    Ok(FinalizedImage),
+    /// DB UPDATE failed after rename; carries the path of the renamed final file
+    /// so the caller can remove it.
+    DbError(rusqlite::Error, std::path::PathBuf),
+    RenameFailed,
+}
+
+/// Wraps `finalize_image` with an optional QR-decode step for licensed users.
+/// Acquires and releases the DB lock around `finalize_image`, then runs QR
+/// decode on a blocking task with no DB lock held, and re-acquires the lock
+/// only if a QR string was decoded.
+pub fn finalize_with_optional_qr(
+    db: &crate::db::DbState,
+    app: &tauri::AppHandle,
+    row_id: i64,
+    pending: &PendingImage,
+) -> FinalizeWithQrOutcome {
+    let finalize_result = {
+        let conn = db.lock().unwrap();
+        finalize_image(&conn, row_id, pending)
+    };
+
+    match finalize_result {
+        FinalizeResult::Ok(final_filename) => {
+            let mut qr_text: Option<String> = None;
+            if crate::license::is_activated(app) {
+                if let Some(images_dir) =
+                    app.path().app_data_dir().ok().map(|d: std::path::PathBuf| d.join(IMAGES_DIR))
+                {
+                    let png_path = images_dir.join(&final_filename);
+                    let png_path_str = png_path.to_string_lossy().into_owned();
+                    // DB lock is released; run QR decode on a blocking thread so
+                    // other threads (incl. the CGEventTap callback) are not gated.
+                    let qr_result = tauri::async_runtime::block_on(
+                        tauri::async_runtime::spawn_blocking(move || {
+                            rxing::helpers::detect_in_file(&png_path_str, None)
+                                .ok()
+                                .map(|r| r.getText().to_string())
+                        }),
+                    );
+                    if let Ok(Some(text)) = qr_result {
+                        let conn = db.lock().unwrap();
+                        let _ = crate::db::update_qr_text(&conn, row_id, &text);
+                        qr_text = Some(text);
+                    }
+                }
+            }
+            FinalizeWithQrOutcome::Ok(FinalizedImage {
+                final_filename,
+                qr_text,
+            })
+        }
+        FinalizeResult::DbError(e) => {
+            let final_file = pending
+                .tmp_path
+                .parent()
+                .map(|d| d.join(format!("{row_id}.png")))
+                .unwrap_or_default();
+            FinalizeWithQrOutcome::DbError(e, final_file)
+        }
+        FinalizeResult::RenameFailed => FinalizeWithQrOutcome::RenameFailed,
+    }
+}
+
+/// Sub-directory under `app_data_dir` that stores clipboard image files.
+pub const IMAGES_DIR: &str = "images";
+
+/// Returns true iff `name` is safe to use as an image file path component.
+///
+/// Rejects strings that contain path separators or null bytes, do not end with
+/// `.png`, or match a Windows reserved device name (e.g. `NUL.png`, `CON.png`).
+pub fn is_safe_image_filename(name: &str) -> bool {
+    if name.is_empty()
+        || name.contains('/')
+        || name.contains('\\')
+        || name.contains('\0')
+    {
+        return false;
+    }
+    if !name.ends_with(".png") {
+        return false;
+    }
+    let stem = name.trim_end_matches(".png").to_uppercase();
+    let reserved = [
+        "CON", "PRN", "AUX", "NUL",
+        "COM1", "COM2", "COM3", "COM4", "COM5", "COM6", "COM7", "COM8", "COM9",
+        "LPT1", "LPT2", "LPT3", "LPT4", "LPT5", "LPT6", "LPT7", "LPT8", "LPT9",
+    ];
+    !reserved.contains(&stem.as_str())
+}
+
+/// Deletes image files for the given filenames, skipping any that fail the
+/// safety check or are no longer present on disk. Used for both eviction
+/// from the poller and bulk deletion from history/folder commands.
+pub fn cleanup_image_files(app: &tauri::AppHandle, filenames: &[String]) {
     if filenames.is_empty() {
         return;
     }
-    if let Ok(images_dir) = app.path().app_data_dir().map(|d| d.join("images")) {
-        for filename in filenames {
-            // Validate: reject paths that escape the images directory.
-            if is_safe_image_filename(filename) {
-                let _ = std::fs::remove_file(images_dir.join(filename));
-            }
-        }
-    }
+    let Ok(images_dir) = app.path().app_data_dir().map(|d| d.join(IMAGES_DIR)) else {
+        return;
+    };
+    filenames.iter()
+        .filter(|f| is_safe_image_filename(f))
+        .map(|f| images_dir.join(f))
+        .filter(|p| p.starts_with(&images_dir) && p.exists())
+        .for_each(|p| { let _ = std::fs::remove_file(p); });
 }
 
 #[cfg(test)]
@@ -240,6 +332,15 @@ mod tests {
     fn safe_filename_dot_png_only() {
         // ".png" has no path separators or null bytes and ends with ".png"
         assert!(is_safe_image_filename(".png"));
+    }
+
+    #[test]
+    fn safe_filename_rejects_windows_reserved_names() {
+        assert!(!is_safe_image_filename("CON.png"));
+        assert!(!is_safe_image_filename("nul.png"));
+        assert!(!is_safe_image_filename("Com1.png"));
+        assert!(!is_safe_image_filename("LPT9.png"));
+        assert!(is_safe_image_filename("CONNECT.png"));
     }
 
     // ------------------------------------------------------------------ //

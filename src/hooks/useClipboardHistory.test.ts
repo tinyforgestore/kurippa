@@ -7,6 +7,7 @@ import { useClipboardHistory } from "@/hooks/useClipboardHistory";
 import { ClipboardItem, HISTORY_DISPLAY_LIMIT, Folder } from "@/types";
 import { foldersAtom } from "@/atoms/folders";
 import { queryAtom } from "@/atoms/navigation";
+import { CLIPBOARD_UPDATED, HISTORY_CLEARED } from "@/constants/events";
 
 type ClipboardUpdatedCb = (event: { payload: ReturnType<typeof makeItem> }) => void;
 type HistoryClearedCb = () => void;
@@ -24,8 +25,8 @@ vi.mock("@tauri-apps/plugin-log", () => ({
 
 vi.mock("@tauri-apps/api/event", () => ({
   listen: vi.fn((eventName: string, cb: ClipboardUpdatedCb | HistoryClearedCb) => {
-    if (eventName === "clipboard-updated") capturedClipboardUpdated = cb as ClipboardUpdatedCb;
-    if (eventName === "history-cleared") capturedHistoryCleared = cb as HistoryClearedCb;
+    if (eventName === CLIPBOARD_UPDATED) capturedClipboardUpdated = cb as ClipboardUpdatedCb;
+    if (eventName === HISTORY_CLEARED) capturedHistoryCleared = cb as HistoryClearedCb;
     return Promise.resolve(() => {});
   }),
 }));

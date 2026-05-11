@@ -2,6 +2,7 @@ import { useEffect, useCallback } from "react";
 import { useSetAtom } from "jotai";
 import { invoke } from "@tauri-apps/api/core";
 import { foldersAtom, maxFoldersToastAtom } from "@/atoms/folders";
+import { MAX_FOLDERS_REACHED_ERROR, TRIAL_ERROR } from "@/constants/errors";
 import { useFoldersStore } from "@/store";
 
 interface UseFoldersParams {
@@ -30,10 +31,10 @@ export function useFolders({ onTrialError }: UseFoldersParams = {}) {
         return folder;
       })
       .catch((err: string) => {
-        if (err === "max_folders_reached") {
+        if (err === MAX_FOLDERS_REACHED_ERROR) {
           setMaxFoldersToast(true);
           setTimeout(() => setMaxFoldersToast(false), 1500);
-        } else if (err === "trial") {
+        } else if (err === TRIAL_ERROR) {
           onTrialError?.("Folder organisation");
         }
         throw err;
@@ -59,7 +60,7 @@ export function useFolders({ onTrialError }: UseFoldersParams = {}) {
   const moveItemToFolder = useCallback((itemId: number, folderId: number) => {
     return invoke("move_item_to_folder", { itemId, folderId })
       .catch((err: string) => {
-        if (err === "trial") {
+        if (err === TRIAL_ERROR) {
           onTrialError?.("Folder organisation");
         } else {
           console.error(err);
@@ -70,7 +71,7 @@ export function useFolders({ onTrialError }: UseFoldersParams = {}) {
   const removeItemFromFolder = useCallback((itemId: number) => {
     return invoke("remove_item_from_folder", { itemId })
       .catch((err: string) => {
-        if (err === "trial") {
+        if (err === TRIAL_ERROR) {
           onTrialError?.("Folder organisation");
         } else {
           console.error(err);

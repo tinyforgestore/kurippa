@@ -5,6 +5,7 @@ import { Provider, createStore } from "jotai";
 import { StoreProvider } from "@/store";
 import { useFolders } from "@/hooks/useFolders";
 import { Folder } from "@/types";
+import { MAX_FOLDERS_REACHED_ERROR, TRIAL_ERROR } from "@/constants/errors";
 
 const mockInvoke = vi.fn();
 vi.mock("@tauri-apps/api/core", () => ({ invoke: (...args: unknown[]) => mockInvoke(...args) }));
@@ -64,7 +65,7 @@ describe("useFolders", () => {
 
     it("shows maxFoldersToast and hides it after 1500ms on max_folders_reached error", async () => {
       mockInvoke.mockResolvedValueOnce([]); // initial loadFolders
-      mockInvoke.mockRejectedValueOnce("max_folders_reached");
+      mockInvoke.mockRejectedValueOnce(MAX_FOLDERS_REACHED_ERROR);
 
       const { wrapper } = makeWrapper();
       const { result } = renderHook(() => useFolders(), { wrapper });
@@ -83,7 +84,7 @@ describe("useFolders", () => {
 
     it("rethrows the error on max_folders_reached", async () => {
       mockInvoke.mockResolvedValueOnce([]); // initial loadFolders
-      mockInvoke.mockRejectedValueOnce("max_folders_reached");
+      mockInvoke.mockRejectedValueOnce(MAX_FOLDERS_REACHED_ERROR);
 
       const { wrapper } = makeWrapper();
       const { result } = renderHook(() => useFolders(), { wrapper });
@@ -91,7 +92,7 @@ describe("useFolders", () => {
 
       await expect(
         act(async () => { await result.current.createFolder("Overflow"); })
-      ).rejects.toBe("max_folders_reached");
+      ).rejects.toBe(MAX_FOLDERS_REACHED_ERROR);
     });
   });
 
@@ -170,7 +171,7 @@ describe("useFolders", () => {
   describe("createFolder — trial error", () => {
     it("calls onTrialError with 'Folder organisation' and rethrows on trial error", async () => {
       mockInvoke.mockResolvedValueOnce([]); // loadFolders
-      mockInvoke.mockRejectedValueOnce("trial");
+      mockInvoke.mockRejectedValueOnce(TRIAL_ERROR);
 
       const onTrialError = vi.fn();
       const { wrapper } = makeWrapper();
@@ -179,7 +180,7 @@ describe("useFolders", () => {
 
       await expect(
         act(async () => { await result.current.createFolder("Work"); })
-      ).rejects.toBe("trial");
+      ).rejects.toBe(TRIAL_ERROR);
 
       expect(onTrialError).toHaveBeenCalledWith("Folder organisation");
     });
@@ -188,7 +189,7 @@ describe("useFolders", () => {
   describe("moveItemToFolder — error paths", () => {
     it("calls onTrialError on trial error", async () => {
       mockInvoke.mockResolvedValueOnce([]); // loadFolders
-      mockInvoke.mockRejectedValueOnce("trial");
+      mockInvoke.mockRejectedValueOnce(TRIAL_ERROR);
 
       const onTrialError = vi.fn();
       const { wrapper } = makeWrapper();
@@ -223,7 +224,7 @@ describe("useFolders", () => {
   describe("removeItemFromFolder — error paths", () => {
     it("calls onTrialError on trial error", async () => {
       mockInvoke.mockResolvedValueOnce([]); // loadFolders
-      mockInvoke.mockRejectedValueOnce("trial");
+      mockInvoke.mockRejectedValueOnce(TRIAL_ERROR);
 
       const onTrialError = vi.fn();
       const { wrapper } = makeWrapper();
