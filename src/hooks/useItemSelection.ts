@@ -5,6 +5,7 @@ import { ClipboardItem, ListEntry } from "@/types";
 
 type FolderEntry = Extract<ListEntry, { kind: "folder-header" }>;
 type ItemEntry = Extract<ListEntry, { kind: "item" }>;
+type PinnedHeaderEntry = Extract<ListEntry, { kind: "pinned-header" }>;
 import { itemDisplayLabel } from "@/utils/format";
 import { info } from "@tauri-apps/plugin-log";
 import { useDeleteAnimation } from "@/hooks/useDeleteAnimation";
@@ -30,6 +31,7 @@ interface UseItemSelectionOptions {
   onExitFolderSection?: () => void;
   expandedFolderId?: number | null;
   onDeleteFolder?: (id: number, name: string) => void;
+  onDeletePinned?: (count: number) => void;
   onOpenPreview: () => void;
   onClosePreview: () => void;
   onOpenPasteAs: (item: ClipboardItem) => void;
@@ -53,6 +55,7 @@ export function useItemSelection(
     onExitFolderSection,
     expandedFolderId,
     onDeleteFolder,
+    onDeletePinned,
     onOpenPreview,
     onClosePreview,
     onOpenPasteAs,
@@ -137,6 +140,10 @@ export function useItemSelection(
       action: () => onDeleteFolder?.((currentEntry as FolderEntry).folderId, (currentEntry as FolderEntry).name) },
     { key: "Delete", meta: true, guard: () => enabled && currentEntry?.kind === "folder-header",
       action: () => onDeleteFolder?.((currentEntry as FolderEntry).folderId, (currentEntry as FolderEntry).name) },
+    { key: "Backspace", meta: true, guard: () => enabled && currentEntry?.kind === "pinned-header",
+      action: () => onDeletePinned?.((currentEntry as PinnedHeaderEntry).count) },
+    { key: "Delete", meta: true, guard: () => enabled && currentEntry?.kind === "pinned-header",
+      action: () => onDeletePinned?.((currentEntry as PinnedHeaderEntry).count) },
     { key: "Backspace", meta: true, guard: () => enabled && currentEntry?.kind === "item" && deletingId === null,
       action: () => { info("Delete key pressed with modifier, attempting to delete item"); triggerDelete((currentEntry as ItemEntry).result.item.id); } },
     { key: "Delete", meta: true, guard: () => enabled && currentEntry?.kind === "item" && deletingId === null,
@@ -159,6 +166,7 @@ export function useItemSelection(
     onClosePreview,
     onPinToggle,
     onDeleteFolder,
+    onDeletePinned,
     deletingId,
   ]);
 

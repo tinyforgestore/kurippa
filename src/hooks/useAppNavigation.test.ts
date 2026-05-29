@@ -79,4 +79,12 @@ describe("useAppNavigation", () => {
       state: { itemId: 99 },
     });
   });
+
+  it("toPinnedDelete navigates with count state", () => {
+    const { result } = renderHook(() => useAppNavigation());
+    result.current.toPinnedDelete(4);
+    expect(navigateMock).toHaveBeenCalledWith("/pinned-delete", {
+      state: { count: 4 },
+    });
+  });
 });

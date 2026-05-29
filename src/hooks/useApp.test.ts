@@ -40,7 +40,7 @@ vi.mock("@/hooks/useAppState", () => ({
     multiSelect: { active: false, selections: new Set(), maxToastVisible: false, flashingId: null },
     defaultSeparator: "newline", onMergePaste: vi.fn(), onCancelSeparator: vi.fn(),
     folders: [], folderNameInputValue: "", setFolderNameInputValue: vi.fn(),
-    confirmFolderNameInput: vi.fn(), confirmFolderDelete: vi.fn(),
+    confirmFolderNameInput: vi.fn(), confirmFolderDelete: vi.fn(), confirmPinnedDelete: vi.fn(), unpinAllPinned: vi.fn(),
     moveItemToFolder: vi.fn(), removeItemFromFolder: vi.fn(),
     expandedFolderId: null, enterFolderSection: vi.fn(), exitFolderSection: vi.fn(),
     maxFoldersToast: false, updateInfo: null, installUpdate: vi.fn(), dismissUpdate: vi.fn(),

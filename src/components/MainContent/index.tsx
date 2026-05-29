@@ -8,6 +8,7 @@ import { FolderNameInput } from "@/components/FolderNameInput";
 import { FolderDeleteConfirm } from "@/components/FolderDeleteConfirm";
 import { FolderPicker } from "@/components/FolderPicker";
 import { HistoryList } from "@/components/HistoryList";
+import { PinnedDeleteConfirm } from "@/components/PinnedDeleteConfirm";
 
 interface MainContentProps {
   executePasteOption: (opt: PasteOption) => void;
@@ -19,6 +20,8 @@ interface MainContentProps {
   setFolderNameInputValue: (v: string) => void;
   confirmFolderNameInput: () => void;
   confirmFolderDelete: (del: boolean) => void;
+  confirmPinnedDelete: () => void;
+  unpinAllPinned: () => void;
   folders: Folder[];
   visibleEntries: ListEntry[];
   moveItemToFolder: (itemId: number, folderId: number) => Promise<void>;
@@ -48,6 +51,8 @@ export function MainContent({
   setFolderNameInputValue,
   confirmFolderNameInput,
   confirmFolderDelete,
+  confirmPinnedDelete,
+  unpinAllPinned,
   folders,
   visibleEntries,
   moveItemToFolder,
@@ -115,6 +120,17 @@ export function MainContent({
           <FolderDeleteConfirm
             folderName={(location.state as { target: { id: number; name: string } } | null)?.target?.name ?? ""}
             onConfirm={() => confirmFolderDelete(true)}
+            onCancel={() => navigate("/")}
+          />
+        }
+      />
+      <Route
+        path="/pinned-delete"
+        element={
+          <PinnedDeleteConfirm
+            count={(location.state as { count: number } | null)?.count ?? 0}
+            onConfirm={confirmPinnedDelete}
+            onUnpinAll={unpinAllPinned}
             onCancel={() => navigate("/")}
           />
         }

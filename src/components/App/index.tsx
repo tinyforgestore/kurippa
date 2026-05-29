@@ -51,6 +51,8 @@ function App() {
     setFolderNameInputValue,
     confirmFolderNameInput,
     confirmFolderDelete,
+    confirmPinnedDelete,
+    unpinAllPinned,
     moveItemToFolder,
     removeItemFromFolder,
     expandedFolderId,
@@ -124,6 +126,8 @@ function App() {
           setFolderNameInputValue={setFolderNameInputValue}
           confirmFolderNameInput={confirmFolderNameInput}
           confirmFolderDelete={confirmFolderDelete}
+          confirmPinnedDelete={confirmPinnedDelete}
+          unpinAllPinned={unpinAllPinned}
           folders={folders}
           visibleEntries={visibleEntries}
           moveItemToFolder={moveItemToFolder}

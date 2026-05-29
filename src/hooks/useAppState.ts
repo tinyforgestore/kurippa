@@ -151,6 +151,18 @@ export function useAppState({ onTrialError, isActivated = false }: UseAppStatePa
     setUpdateInfo(null);
   }, [updateInfo, setUpdateInfo]);
 
+  const confirmPinnedDelete = useCallback(() => {
+    invoke("delete_all_pinned_items")
+      .then(() => { reloadHistory(); nav.toHistory(); })
+      .catch(console.error);
+  }, [nav, reloadHistory]);
+
+  const unpinAllPinned = useCallback(() => {
+    invoke("unpin_all_items")
+      .then(() => { reloadHistory(); nav.toHistory(); })
+      .catch(console.error);
+  }, [nav, reloadHistory]);
+
   const { listRef, pasteSelected, deletingId } = useItemSelection(
     undefined,
     dismiss,
@@ -165,6 +177,7 @@ export function useAppState({ onTrialError, isActivated = false }: UseAppStatePa
       onExitFolderSection: exitFolderSection,
       expandedFolderId,
       onDeleteFolder: (id: number, name: string) => nav.toFolderDelete({ id, name }),
+      onDeletePinned: (count: number) => nav.toPinnedDelete(count),
       onOpenPreview: openPreview,
       onClosePreview: closePreview,
       onOpenPasteAs: (item: ClipboardItem) => nav.toPasteAs(item),
@@ -218,6 +231,8 @@ export function useAppState({ onTrialError, isActivated = false }: UseAppStatePa
     setFolderNameInputValue: folderActions.setFolderNameInputValue,
     confirmFolderNameInput: folderActions.confirmFolderNameInput,
     confirmFolderDelete: folderActions.confirmFolderDelete,
+    confirmPinnedDelete,
+    unpinAllPinned,
     moveItemToFolder: folderActions.moveItemToFolder,
     removeItemFromFolder: folderActions.removeItemFromFolder,
     expandedFolderId,

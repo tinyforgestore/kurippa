@@ -370,6 +370,48 @@ fn clear_history_text_only_item_not_in_returned_paths() {
 }
 
 // ------------------------------------------------------------------
+// delete_all_pinned()
+// ------------------------------------------------------------------
+
+#[test]
+fn delete_all_pinned_removes_only_pinned_returns_image_paths() {
+    let conn = in_memory_db();
+
+    // Two pinned items with image_path
+    let mut pinned_a = make_item("pinned-a", 1_000, true);
+    pinned_a.image_path = Some("pa.png".to_string());
+    insert_item(&conn, &pinned_a).expect("insert pinned-a");
+
+    let mut pinned_b = make_item("pinned-b", 2_000, true);
+    pinned_b.image_path = Some("pb.png".to_string());
+    insert_item(&conn, &pinned_b).expect("insert pinned-b");
+
+    // One pinned item without image_path
+    let pinned_c = make_item("pinned-c", 3_000, true);
+    insert_item(&conn, &pinned_c).expect("insert pinned-c");
+
+    // Two unpinned items, one with image
+    let mut unpinned_a = make_item("unpinned-a", 4_000, false);
+    unpinned_a.image_path = Some("ua.png".to_string());
+    insert_item(&conn, &unpinned_a).expect("insert unpinned-a");
+
+    let unpinned_b = make_item("unpinned-b", 5_000, false);
+    insert_item(&conn, &unpinned_b).expect("insert unpinned-b");
+
+    let paths = delete_all_pinned(&conn).expect("delete_all_pinned should succeed");
+
+    // Returned image paths must contain exactly the two pinned image filenames
+    assert_eq!(paths.len(), 2, "should return 2 image filenames, got: {paths:?}");
+    assert!(paths.contains(&"pa.png".to_string()));
+    assert!(paths.contains(&"pb.png".to_string()));
+
+    // The remaining rows must be only the unpinned ones (2 rows)
+    let rows = get_history(&conn, 50).expect("get_history");
+    assert_eq!(rows.len(), 2, "only the 2 unpinned items should remain");
+    assert!(rows.iter().all(|r| !r.pinned), "no pinned items should remain");
+}
+
+// ------------------------------------------------------------------
 // delete_item_with_path()
 // ------------------------------------------------------------------
 
@@ -438,6 +480,34 @@ fn unpin_item_clears_pinned_flag() {
     let rows = get_history(&conn, 10).expect("get_history");
     let saved = rows.iter().find(|r| r.id == id).expect("item should exist");
     assert!(!saved.pinned, "pinned should be cleared to false");
+}
+
+// ------------------------------------------------------------------
+// unpin_all()
+// ------------------------------------------------------------------
+
+#[test]
+fn unpin_all_clears_pinned_flag_on_all_pinned() {
+    let conn = in_memory_db();
+
+    // 3 pinned, 2 unpinned
+    insert_item(&conn, &make_item("p1", 1_000, true)).unwrap();
+    insert_item(&conn, &make_item("p2", 2_000, true)).unwrap();
+    insert_item(&conn, &make_item("p3", 3_000, true)).unwrap();
+    insert_item(&conn, &make_item("u1", 4_000, false)).unwrap();
+    insert_item(&conn, &make_item("u2", 5_000, false)).unwrap();
+
+    unpin_all(&conn).expect("unpin_all should succeed");
+
+    let total: i64 = conn
+        .query_row("SELECT COUNT(*) FROM items", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(total, 5, "no items should be deleted by unpin_all");
+
+    let still_pinned: i64 = conn
+        .query_row("SELECT COUNT(*) FROM items WHERE pinned = 1", [], |r| r.get(0))
+        .unwrap();
+    assert_eq!(still_pinned, 0, "no items should remain pinned after unpin_all");
 }
 
 // ------------------------------------------------------------------

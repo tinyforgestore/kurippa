@@ -91,6 +91,7 @@ function makeOptions(overrides: Partial<{
   onEnterFolderSection: (id: number) => void;
   onExitFolderSection: () => void;
   onDeleteFolder: (id: number, name: string) => void;
+  onDeletePinned: (count: number) => void;
   expandedFolderId: number | null;
   onOpenPreview: () => void;
   onClosePreview: () => void;
@@ -674,6 +675,44 @@ describe("useItemSelection", () => {
 
       act(() => { fireKeydown("0", { metaKey: true }); });
       expect(onEnterFolderSection).toHaveBeenCalledWith(9);
+    });
+  });
+
+  describe("pinned-header bulk delete (⌘Backspace / ⌘Delete)", () => {
+    it("⌘Backspace on a pinned-header calls onDeletePinned with its count", () => {
+      const onDeletePinned = vi.fn();
+      const entries: ListEntry[] = [makePinnedHeader(4)];
+      const { wrapper } = makeWrapper();
+      renderHook(() =>
+        useItemSelection(entries, vi.fn(), "", makeOptions({ onDeletePinned }))
+      , { wrapper });
+
+      act(() => { fireKeydown("Backspace", { metaKey: true }); });
+      expect(onDeletePinned).toHaveBeenCalledWith(4);
+    });
+
+    it("⌘Delete on a pinned-header calls onDeletePinned with its count", () => {
+      const onDeletePinned = vi.fn();
+      const entries: ListEntry[] = [makePinnedHeader(2)];
+      const { wrapper } = makeWrapper();
+      renderHook(() =>
+        useItemSelection(entries, vi.fn(), "", makeOptions({ onDeletePinned }))
+      , { wrapper });
+
+      act(() => { fireKeydown("Delete", { metaKey: true }); });
+      expect(onDeletePinned).toHaveBeenCalledWith(2);
+    });
+
+    it("⌘Backspace on an item does not call onDeletePinned", () => {
+      const onDeletePinned = vi.fn();
+      const entries: ListEntry[] = [makeItemEntry(1)];
+      const { wrapper } = makeWrapper();
+      renderHook(() =>
+        useItemSelection(entries, vi.fn(), "", makeOptions({ onDeletePinned }))
+      , { wrapper });
+
+      act(() => { fireKeydown("Backspace", { metaKey: true }); });
+      expect(onDeletePinned).not.toHaveBeenCalled();
     });
   });
 

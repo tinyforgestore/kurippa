@@ -174,6 +174,29 @@ pub fn get_item_formats(
     rows.collect()
 }
 
+/// Delete all pinned items. Returns the image filenames so the caller can
+/// remove them from the filesystem. Pinned items always have folder_id NULL
+/// by invariant (see KP-025 notes), so no folder guard is needed.
+pub fn delete_all_pinned(conn: &Connection) -> Result<Vec<String>> {
+    let mut stmt = conn.prepare_cached(
+        "SELECT image_path FROM items WHERE pinned = 1 AND image_path IS NOT NULL",
+    )?;
+    let paths: Vec<String> = stmt
+        .query_map([], |row| row.get::<_, String>(0))?
+        .filter_map(|r| r.ok())
+        .collect();
+    conn.execute("DELETE FROM items WHERE pinned = 1", [])?;
+    Ok(paths)
+}
+
+/// Clear the pinned flag on all pinned items. Items survive — they lose their
+/// pinned status and re-appear in the regular history at their original time
+/// position.
+pub fn unpin_all(conn: &Connection) -> Result<()> {
+    conn.execute("UPDATE items SET pinned = 0 WHERE pinned = 1", [])?;
+    Ok(())
+}
+
 /// Delete all non-pinned, non-folder items and return the image paths of deleted items.
 pub fn clear_history(conn: &Connection) -> Result<Vec<String>> {
     let mut stmt = conn.prepare_cached(

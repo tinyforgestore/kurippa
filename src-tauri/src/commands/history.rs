@@ -1,3 +1,4 @@
+use crate::clipboard::image;
 use crate::clipboard::image::{is_safe_image_filename, IMAGES_DIR};
 use crate::db::{self, DbState};
 use crate::license;
@@ -60,6 +61,27 @@ pub fn delete_item(
     }
 
     Ok(())
+}
+
+/// Delete all pinned items, removing their image files from the filesystem.
+#[tauri::command]
+pub fn delete_all_pinned_items(
+    app: tauri::AppHandle,
+    state: tauri::State<DbState>,
+) -> Result<(), String> {
+    let image_paths = {
+        let conn = state.lock().map_err(|e| e.to_string())?;
+        db::delete_all_pinned(&conn).map_err(|e| e.to_string())?
+    };
+    image::cleanup_image_files(&app, &image_paths);
+    Ok(())
+}
+
+/// Clear the pinned flag on all pinned items. Items survive and re-enter the regular history.
+#[tauri::command]
+pub fn unpin_all_items(state: tauri::State<DbState>) -> Result<(), String> {
+    let conn = state.lock().map_err(|e| e.to_string())?;
+    db::unpin_all(&conn).map_err(|e| e.to_string())
 }
 
 /// Returns the absolute filesystem path for an image file stored in the

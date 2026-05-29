@@ -203,6 +203,8 @@ pub fn run() {
             commands::pin_item,
             commands::unpin_item,
             commands::delete_item,
+            commands::delete_all_pinned_items,
+            commands::unpin_all_items,
             commands::get_image_path,
             commands::open_settings_window,
             commands::clear_history,

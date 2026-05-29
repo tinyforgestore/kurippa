@@ -15,5 +15,6 @@ export function useAppNavigation() {
     toFolderDelete: (target: { id: number; name: string }) =>
       navigate("/folder-delete", { state: { target } }),
     toFolderPicker: (itemId: number) => navigate("/folder-picker", { state: { itemId } }),
+    toPinnedDelete: (count: number) => navigate("/pinned-delete", { state: { count } }),
   };
 }

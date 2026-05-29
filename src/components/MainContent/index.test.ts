@@ -106,6 +106,8 @@ function makeProps(overrides: Partial<Parameters<typeof MainContent>[0]> = {}) {
     setFolderNameInputValue: vi.fn(),
     confirmFolderNameInput: vi.fn(),
     confirmFolderDelete: vi.fn(),
+    confirmPinnedDelete: vi.fn(),
+    unpinAllPinned: vi.fn(),
     folders: [] as Folder[],
     visibleEntries: [] as ListEntry[],
     moveItemToFolder: vi.fn().mockResolvedValue(undefined),
