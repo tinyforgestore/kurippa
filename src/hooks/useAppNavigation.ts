@@ -8,7 +8,7 @@ export function useAppNavigation() {
     toPasteAs: (item: ClipboardItem) => navigate("/paste-as", { state: { item } }),
     toSeparatorPicker: () => navigate("/separator-picker"),
     toFolderNameInput: (
-      mode: "create" | "rename",
+      mode: "create" | "rename" | "convert-pinned",
       targetId: number | null,
       pickerItemId: number | null
     ) => navigate("/folder-name-input", { state: { mode, targetId, pickerItemId } }),

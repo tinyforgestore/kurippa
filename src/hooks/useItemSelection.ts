@@ -32,6 +32,7 @@ interface UseItemSelectionOptions {
   expandedFolderId?: number | null;
   onDeleteFolder?: (id: number, name: string) => void;
   onDeletePinned?: (count: number) => void;
+  onConvertPinnedToFolder?: () => void;
   onOpenPreview: () => void;
   onClosePreview: () => void;
   onOpenPasteAs: (item: ClipboardItem) => void;
@@ -56,6 +57,7 @@ export function useItemSelection(
     expandedFolderId,
     onDeleteFolder,
     onDeletePinned,
+    onConvertPinnedToFolder,
     onOpenPreview,
     onClosePreview,
     onOpenPasteAs,
@@ -121,6 +123,8 @@ export function useItemSelection(
 
     { key: "Escape", guard: () => enabled,
       action: () => dismiss() },
+    { key: "Enter", shift: true, guard: () => enabled && currentEntry?.kind === "pinned-header",
+      action: () => onConvertPinnedToFolder?.() },
     { key: "Enter", guard: () => enabled && currentEntry?.kind === "pinned-header",
       action: () => { onEnterSection(); setSelectedIndex(0); } },
     { key: "Enter", guard: () => enabled && currentEntry?.kind === "folder-header",
@@ -167,6 +171,7 @@ export function useItemSelection(
     onPinToggle,
     onDeleteFolder,
     onDeletePinned,
+    onConvertPinnedToFolder,
     deletingId,
   ]);
 

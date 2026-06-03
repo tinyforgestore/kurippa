@@ -106,11 +106,12 @@ export function MainContent({
             onChange={setFolderNameInputValue}
             onConfirm={confirmFolderNameInput}
             onCancel={() => navigate("/")}
-            placeholder={
-              (location.state as { mode?: string } | null)?.mode === "create"
-                ? "New folder name"
-                : "Rename folder"
-            }
+            placeholder={(() => {
+              const m = (location.state as { mode?: string } | null)?.mode;
+              if (m === "create") return "New folder name";
+              if (m === "convert-pinned") return "Folder name";
+              return "Rename folder";
+            })()}
           />
         }
       />

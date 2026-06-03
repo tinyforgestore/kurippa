@@ -6,6 +6,12 @@ import { StoreProvider } from "@/store";
 import { useFolderActions } from "@/hooks/useFolderActions";
 import { Folder } from "@/types";
 
+vi.mock("@tauri-apps/api/core", () => ({
+  invoke: vi.fn(),
+}));
+import { invoke } from "@tauri-apps/api/core";
+const mockInvoke = vi.mocked(invoke);
+
 const mockNav = {
   toHistory: vi.fn(),
   toPasteAs: vi.fn(),
@@ -132,6 +138,54 @@ describe("useFolderActions", () => {
       await act(() => { result.current.confirmFolderNameInput(); });
       expect(params.renameFolder).toHaveBeenCalledWith(3, "Renamed");
       expect(params.loadFolders).toHaveBeenCalledOnce();
+    });
+  });
+
+  describe("confirmFolderNameInput — convert-pinned mode", () => {
+    it("invokes convert_pinned_to_folder and reloads history on success", async () => {
+      mockPathname = "/folder-name-input";
+      mockState = { mode: "convert-pinned", targetId: null, pickerItemId: null };
+      const newFolder = makeFolder(77);
+      mockInvoke.mockResolvedValueOnce(newFolder);
+      const params = makeParams();
+      const { wrapper } = makeWrapper();
+      const { result } = renderHook(() => useFolderActions(params), { wrapper });
+      act(() => result.current.setFolderNameInputValue("Pinned"));
+      await act(async () => {
+        result.current.confirmFolderNameInput();
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      expect(mockInvoke).toHaveBeenCalledWith("convert_pinned_to_folder", { name: "Pinned" });
+      expect(params.reloadHistory).toHaveBeenCalledOnce();
+      expect(mockNav.toHistory).toHaveBeenCalledOnce();
+    });
+
+    it("calls onTrialError when backend returns trial error", async () => {
+      mockPathname = "/folder-name-input";
+      mockState = { mode: "convert-pinned", targetId: null, pickerItemId: null };
+      mockInvoke.mockRejectedValueOnce("trial");
+      const onTrialError = vi.fn();
+      const params = makeParams({ onTrialError });
+      const { wrapper } = makeWrapper();
+      const { result } = renderHook(() => useFolderActions(params), { wrapper });
+      act(() => result.current.setFolderNameInputValue("Pinned"));
+      await act(async () => {
+        result.current.confirmFolderNameInput();
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      expect(onTrialError).toHaveBeenCalledWith("Folder organisation");
+    });
+
+    it("ignores convert when name is empty", () => {
+      mockPathname = "/folder-name-input";
+      mockState = { mode: "convert-pinned", targetId: null, pickerItemId: null };
+      const params = makeParams();
+      const { wrapper } = makeWrapper();
+      const { result } = renderHook(() => useFolderActions(params), { wrapper });
+      act(() => result.current.confirmFolderNameInput());
+      expect(mockInvoke).not.toHaveBeenCalled();
     });
   });
 

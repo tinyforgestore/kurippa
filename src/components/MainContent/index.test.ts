@@ -246,6 +246,15 @@ describe("MainContent", () => {
       );
       expect(container.querySelector("[data-placeholder]")?.textContent).toBe("Rename folder");
     });
+
+    it("passes 'Folder name' when mode is convert-pinned", () => {
+      const { container } = renderAt(
+        "/folder-name-input",
+        { mode: "convert-pinned", targetId: null, pickerItemId: null },
+        makeProps()
+      );
+      expect(container.querySelector("[data-placeholder]")?.textContent).toBe("Folder name");
+    });
   });
 
   describe("FolderDeleteConfirm folder name", () => {

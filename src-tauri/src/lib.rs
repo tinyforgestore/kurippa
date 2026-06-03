@@ -219,6 +219,7 @@ pub fn run() {
             commands::rename_folder,
             commands::delete_folder,
             commands::move_item_to_folder,
+            commands::convert_pinned_to_folder,
             commands::remove_item_from_folder,
             commands::install_update,
             commands::reclamp_main_window,

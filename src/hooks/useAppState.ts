@@ -94,7 +94,13 @@ export function useAppState({ onTrialError, isActivated = false }: UseAppStatePa
     removeItemFromFolder: _removeItemFromFolder,
     loadFolders,
     reloadHistory,
+    onTrialError,
   });
+
+  const onConvertPinnedToFolder = useCallback(() => {
+    folderActions.setFolderNameInputValue("Pinned");
+    nav.toFolderNameInput("convert-pinned", null, null);
+  }, [folderActions, nav]);
 
   // eslint-disable-next-line react-hooks/refs
   folderNameInputValueSetterRef.current = folderActions.setFolderNameInputValue;
@@ -178,6 +184,7 @@ export function useAppState({ onTrialError, isActivated = false }: UseAppStatePa
       expandedFolderId,
       onDeleteFolder: (id: number, name: string) => nav.toFolderDelete({ id, name }),
       onDeletePinned: (count: number) => nav.toPinnedDelete(count),
+      onConvertPinnedToFolder,
       onOpenPreview: openPreview,
       onClosePreview: closePreview,
       onOpenPasteAs: (item: ClipboardItem) => nav.toPasteAs(item),

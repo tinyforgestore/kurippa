@@ -1,10 +1,12 @@
 import { useCallback } from "react";
 import { useSetAtom } from "jotai";
 import { useLocation } from "react-router-dom";
+import { invoke } from "@tauri-apps/api/core";
 import { useAppNavigation } from "@/hooks/useAppNavigation";
 import { Folder } from "@/types";
-import { folderNameInputValueAtom } from "@/atoms/folders";
+import { folderNameInputValueAtom, foldersAtom, maxFoldersToastAtom } from "@/atoms/folders";
 import { useFoldersStore } from "@/store";
+import { MAX_FOLDERS_REACHED_ERROR, TRIAL_ERROR } from "@/constants/errors";
 
 interface UseFolderActionsParams {
   createFolder: (name: string) => Promise<Folder>;
@@ -14,6 +16,7 @@ interface UseFolderActionsParams {
   removeItemFromFolder: (itemId: number) => Promise<unknown>;
   loadFolders: () => void;
   reloadHistory: () => void;
+  onTrialError?: (feature: string) => void;
 }
 
 export function useFolderActions({
@@ -24,11 +27,14 @@ export function useFolderActions({
   removeItemFromFolder: _removeItemFromFolder,
   loadFolders,
   reloadHistory,
+  onTrialError,
 }: UseFolderActionsParams) {
   const location = useLocation();
   const nav = useAppNavigation();
   const { folderNameInputValue } = useFoldersStore();
   const setFolderNameInputValue = useSetAtom(folderNameInputValueAtom);
+  const setFolders = useSetAtom(foldersAtom);
+  const setMaxFoldersToast = useSetAtom(maxFoldersToastAtom);
 
   const moveItemToFolder = useCallback((itemId: number, folderId: number) => {
     return _moveItemToFolder(itemId, folderId).then(() => reloadHistory());
@@ -41,7 +47,7 @@ export function useFolderActions({
   const confirmFolderNameInput = useCallback(() => {
     if (location.pathname !== "/folder-name-input") return;
     const { mode, targetId, pickerItemId } = location.state as {
-      mode: "create" | "rename";
+      mode: "create" | "rename" | "convert-pinned";
       targetId: number | null;
       pickerItemId: number | null;
     };
@@ -63,8 +69,24 @@ export function useFolderActions({
       renameFolder(targetId, name)
         .then(() => loadFolders())
         .catch(console.error);
+    } else if (mode === "convert-pinned") {
+      invoke<Folder>("convert_pinned_to_folder", { name })
+        .then((folder) => {
+          setFolders((prev) => [...prev, folder]);
+          reloadHistory();
+        })
+        .catch((err: string) => {
+          if (err === MAX_FOLDERS_REACHED_ERROR) {
+            setMaxFoldersToast(true);
+            setTimeout(() => setMaxFoldersToast(false), 1500);
+          } else if (err === TRIAL_ERROR) {
+            onTrialError?.("Folder organisation");
+          } else {
+            console.error(err);
+          }
+        });
     }
-  }, [location, nav, folderNameInputValue, createFolder, _moveItemToFolder, renameFolder, loadFolders, reloadHistory, setFolderNameInputValue]);
+  }, [location, nav, folderNameInputValue, createFolder, _moveItemToFolder, renameFolder, loadFolders, reloadHistory, setFolderNameInputValue, setFolders, setMaxFoldersToast, onTrialError]);
 
   const confirmFolderDelete = useCallback((deleteItems: boolean) => {
     if (location.pathname !== "/folder-delete") return;

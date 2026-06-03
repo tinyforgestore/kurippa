@@ -96,6 +96,7 @@ function makeOptions(overrides: Partial<{
   onOpenPreview: () => void;
   onClosePreview: () => void;
   onOpenPasteAs: (item: import("@/types").ClipboardItem) => void;
+  onConvertPinnedToFolder: () => void;
   enabled: boolean;
 }> = {}) {
   return {
@@ -675,6 +676,58 @@ describe("useItemSelection", () => {
 
       act(() => { fireKeydown("0", { metaKey: true }); });
       expect(onEnterFolderSection).toHaveBeenCalledWith(9);
+    });
+  });
+
+  describe("convert pinned to folder (Shift+Enter on pinned-header)", () => {
+    it("Shift+Enter on a pinned-header calls onConvertPinnedToFolder", () => {
+      const onConvertPinnedToFolder = vi.fn();
+      const onEnterSection = vi.fn();
+      const entries: ListEntry[] = [makePinnedHeader(3), makeItemEntry(1)];
+      const { wrapper } = makeWrapper();
+      renderHook(() =>
+        useItemSelection(
+          entries,
+          vi.fn(),
+          "",
+          makeOptions({ onConvertPinnedToFolder, onEnterSection })
+        )
+      , { wrapper });
+
+      act(() => { fireKeydown("Enter", { shiftKey: true }); });
+      expect(onConvertPinnedToFolder).toHaveBeenCalledOnce();
+      expect(onEnterSection).not.toHaveBeenCalled();
+    });
+
+    it("plain Enter on a pinned-header still calls onEnterSection (not onConvertPinnedToFolder)", () => {
+      const onConvertPinnedToFolder = vi.fn();
+      const onEnterSection = vi.fn();
+      const entries: ListEntry[] = [makePinnedHeader(3), makeItemEntry(1)];
+      const { wrapper } = makeWrapper();
+      renderHook(() =>
+        useItemSelection(
+          entries,
+          vi.fn(),
+          "",
+          makeOptions({ onConvertPinnedToFolder, onEnterSection })
+        )
+      , { wrapper });
+
+      act(() => { fireKeydown("Enter"); });
+      expect(onEnterSection).toHaveBeenCalledOnce();
+      expect(onConvertPinnedToFolder).not.toHaveBeenCalled();
+    });
+
+    it("Shift+Enter on an item does not call onConvertPinnedToFolder", () => {
+      const onConvertPinnedToFolder = vi.fn();
+      const entries: ListEntry[] = [makeItemEntry(1)];
+      const { wrapper } = makeWrapper();
+      renderHook(() =>
+        useItemSelection(entries, vi.fn(), "", makeOptions({ onConvertPinnedToFolder }))
+      , { wrapper });
+
+      act(() => { fireKeydown("Enter", { shiftKey: true }); });
+      expect(onConvertPinnedToFolder).not.toHaveBeenCalled();
     });
   });
 

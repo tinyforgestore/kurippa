@@ -40,6 +40,29 @@ pub fn create_folder(conn: &Connection, name: &str, now: i64) -> Result<Folder> 
     Ok(Folder { id, name: name.to_string(), created_at: now, position })
 }
 
+/// Atomically: create a new folder + move every pinned item into it (clearing pinned flag).
+/// INSERT folder + UPDATE items in one tx for invariant safety — we never want a state
+/// where the folder exists but items haven't been moved (or vice versa).
+pub fn convert_pinned_to_folder(conn: &Connection, name: &str, now: i64) -> Result<Folder> {
+    let tx = conn.unchecked_transaction()?;
+    let position: i64 = tx.query_row(
+        "SELECT COALESCE(MAX(position), -1) + 1 FROM folders",
+        [],
+        |r| r.get(0),
+    )?;
+    tx.execute(
+        "INSERT INTO folders (name, created_at, position) VALUES (?1, ?2, ?3)",
+        params![name, now, position],
+    )?;
+    let id = tx.last_insert_rowid();
+    tx.execute(
+        "UPDATE items SET folder_id = ?1, pinned = 0 WHERE pinned = 1",
+        params![id],
+    )?;
+    tx.commit()?;
+    Ok(Folder { id, name: name.to_string(), created_at: now, position })
+}
+
 pub fn rename_folder(conn: &Connection, id: i64, name: &str) -> Result<()> {
     conn.execute("UPDATE folders SET name = ?1 WHERE id = ?2", params![name, id])?;
     Ok(())
@@ -317,6 +340,87 @@ mod tests {
     // ------------------------------------------------------------------
     // remove_item_from_folder()
     // ------------------------------------------------------------------
+
+    // ------------------------------------------------------------------
+    // convert_pinned_to_folder()
+    // ------------------------------------------------------------------
+
+    #[test]
+    fn convert_pinned_to_folder_creates_folder_and_moves_pins() {
+        let conn = in_memory_db();
+
+        let mut pinned_ids = Vec::new();
+        for i in 0..2 {
+            let mut item = make_item(&format!("pinned-{i}"), 1000 + i);
+            item.pinned = true;
+            let (id, _) = insert_item(&conn, &item).expect("insert pinned");
+            pinned_ids.push(id);
+        }
+        let mut unpinned_ids = Vec::new();
+        for i in 0..3 {
+            let item = make_item(&format!("unpinned-{i}"), 2000 + i);
+            let (id, _) = insert_item(&conn, &item).expect("insert unpinned");
+            unpinned_ids.push(id);
+        }
+
+        let folder = convert_pinned_to_folder(&conn, "Pinned", 9999)
+            .expect("convert_pinned_to_folder should succeed");
+
+        assert!(folder.id > 0, "folder id must be positive");
+        assert_eq!(folder.name, "Pinned");
+        assert_eq!(folder.position, 0);
+        assert_eq!(folder.created_at, 9999);
+
+        for id in &pinned_ids {
+            let (folder_id, pinned): (Option<i64>, i32) = conn
+                .query_row(
+                    "SELECT folder_id, pinned FROM items WHERE id = ?1",
+                    rusqlite::params![id],
+                    |r| Ok((r.get(0)?, r.get(1)?)),
+                )
+                .expect("query previously-pinned item");
+            assert_eq!(folder_id, Some(folder.id), "pinned item should be in new folder");
+            assert_eq!(pinned, 0, "pinned flag should be cleared");
+        }
+
+        for id in &unpinned_ids {
+            let (folder_id, pinned): (Option<i64>, i32) = conn
+                .query_row(
+                    "SELECT folder_id, pinned FROM items WHERE id = ?1",
+                    rusqlite::params![id],
+                    |r| Ok((r.get(0)?, r.get(1)?)),
+                )
+                .expect("query unpinned item");
+            assert!(folder_id.is_none(), "unpinned items should not be moved");
+            assert_eq!(pinned, 0);
+        }
+    }
+
+    #[test]
+    fn convert_pinned_to_folder_with_zero_pinned_still_creates_folder() {
+        let conn = in_memory_db();
+        let item = make_item("no-pins", 1000);
+        insert_item(&conn, &item).expect("insert item");
+
+        let folder = convert_pinned_to_folder(&conn, "Pinned", 5555)
+            .expect("convert_pinned_to_folder should succeed even with no pinned items");
+
+        assert!(folder.id > 0);
+        assert_eq!(folder.name, "Pinned");
+
+        let folders = get_folders(&conn).expect("get_folders");
+        assert_eq!(folders.len(), 1);
+    }
+
+    #[test]
+    fn convert_pinned_to_folder_assigns_next_position() {
+        let conn = in_memory_db();
+        create_folder(&conn, "Existing", 1000).expect("create existing folder");
+
+        let folder = convert_pinned_to_folder(&conn, "Pinned", 2000)
+            .expect("convert_pinned_to_folder");
+        assert_eq!(folder.position, 1, "should be assigned next position");
+    }
 
     #[test]
     fn remove_item_from_folder_clears_folder_id() {
