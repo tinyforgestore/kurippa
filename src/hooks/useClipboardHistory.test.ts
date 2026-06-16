@@ -303,6 +303,61 @@ describe("useClipboardHistory", () => {
       expect(result.current.results).toHaveLength(HISTORY_DISPLAY_LIMIT);
       expect(result.current.results[0].item.id).toBe(9999);
     });
+
+    it("keeps a pinned item alive when >HISTORY_DISPLAY_LIMIT newer items arrive via clipboard-updated", async () => {
+      const pinned = makeItem(1, true);
+      mockInvoke.mockImplementation((cmd: string) => {
+        if (cmd === "get_history") return Promise.resolve([pinned]);
+        return Promise.resolve(undefined);
+      });
+
+      const { result } = await setup();
+
+      const flood = HISTORY_DISPLAY_LIMIT + 5;
+      await act(async () => {
+        for (let i = 0; i < flood; i++) {
+          capturedClipboardUpdated!({ payload: makeItem(1000 + i, false) });
+        }
+        await Promise.resolve();
+      });
+
+      const ids = result.current.results.map((r) => r.item.id);
+      // Pinned item survives the flood
+      expect(ids).toContain(1);
+      // Regular (non-pinned, non-folder) items are capped at the limit
+      const regularCount = result.current.results.filter(
+        (r) => !r.item.pinned && r.item.folder_id === null
+      ).length;
+      expect(regularCount).toBe(HISTORY_DISPLAY_LIMIT);
+      // Total = regular cap + the surviving pinned item
+      expect(result.current.results).toHaveLength(HISTORY_DISPLAY_LIMIT + 1);
+    });
+
+    it("keeps a folder item alive when >HISTORY_DISPLAY_LIMIT newer items arrive via clipboard-updated", async () => {
+      const foldered = { ...makeItem(1, false), folder_id: 7 };
+      mockInvoke.mockImplementation((cmd: string) => {
+        if (cmd === "get_history") return Promise.resolve([foldered]);
+        return Promise.resolve(undefined);
+      });
+
+      const { result } = await setup();
+
+      const flood = HISTORY_DISPLAY_LIMIT + 5;
+      await act(async () => {
+        for (let i = 0; i < flood; i++) {
+          capturedClipboardUpdated!({ payload: makeItem(2000 + i, false) });
+        }
+        await Promise.resolve();
+      });
+
+      const ids = result.current.results.map((r) => r.item.id);
+      expect(ids).toContain(1);
+      const regularCount = result.current.results.filter(
+        (r) => !r.item.pinned && r.item.folder_id === null
+      ).length;
+      expect(regularCount).toBe(HISTORY_DISPLAY_LIMIT);
+      expect(result.current.results).toHaveLength(HISTORY_DISPLAY_LIMIT + 1);
+    });
   });
 
   describe("history-cleared event", () => {

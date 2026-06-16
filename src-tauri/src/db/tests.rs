@@ -590,3 +590,67 @@ fn get_item_texts_skips_items_with_empty_text() {
     let result = get_item_texts(&conn, &[empty_id]).expect("get_item_texts should succeed");
     assert!(result.is_empty(), "empty-text item should be skipped");
 }
+
+// ------------------------------------------------------------------
+// get_history() — pinned & folder items exempt from limit cutoff
+// ------------------------------------------------------------------
+
+#[test]
+fn get_history_includes_pinned_outside_top_n_limit() {
+    let conn = in_memory_db();
+
+    // 1 OLD pinned item.
+    insert_item(&conn, &make_item("old-pinned", 100, true)).unwrap();
+    // 5 NEW non-pinned items at later timestamps.
+    for i in 0..5_i64 {
+        insert_item(&conn, &make_item(&format!("new-{i}"), 1_000 + i, false)).unwrap();
+    }
+
+    // limit=3 — top-3 by created_at among non-pinned would normally drop the old pinned.
+    let rows = get_history(&conn, 3).expect("get_history should succeed");
+
+    // Expected: 3 most-recent non-pinned + 1 pinned = 4.
+    assert_eq!(rows.len(), 4, "result must include 3 newest non-pinned + 1 pinned, got: {rows:?}");
+
+    let pinned_present = rows.iter().any(|r| r.text.as_deref() == Some("old-pinned"));
+    assert!(pinned_present, "old pinned item must still be present in result");
+
+    let non_pinned_texts: Vec<&str> = rows
+        .iter()
+        .filter(|r| !r.pinned)
+        .filter_map(|r| r.text.as_deref())
+        .collect();
+    assert_eq!(non_pinned_texts, vec!["new-4", "new-3", "new-2"]);
+}
+
+#[test]
+fn get_history_limit_applies_only_to_regular_items() {
+    let conn = in_memory_db();
+
+    // 5 non-pinned items.
+    for i in 0..5_i64 {
+        insert_item(&conn, &make_item(&format!("reg-{i}"), 1_000 + i, false)).unwrap();
+    }
+    // 5 pinned items.
+    for i in 0..5_i64 {
+        insert_item(&conn, &make_item(&format!("pin-{i}"), 2_000 + i, true)).unwrap();
+    }
+    // 5 folder items (need a real folder).
+    let folder = create_folder(&conn, "Bucket", 500).expect("create_folder");
+    for i in 0..5_i64 {
+        let mut item = make_item(&format!("fld-{i}"), 3_000 + i, false);
+        item.folder_id = Some(folder.id);
+        insert_item(&conn, &item).unwrap();
+    }
+
+    let rows = get_history(&conn, 2).expect("get_history should succeed");
+
+    let non_pinned_no_folder = rows.iter().filter(|r| !r.pinned && r.folder_id.is_none()).count();
+    let pinned = rows.iter().filter(|r| r.pinned).count();
+    let folder_items = rows.iter().filter(|r| r.folder_id.is_some()).count();
+
+    assert_eq!(non_pinned_no_folder, 2, "limit must apply only to regular items");
+    assert_eq!(pinned, 5, "all pinned items must be included");
+    assert_eq!(folder_items, 5, "all folder items must be included");
+    assert_eq!(rows.len(), 12);
+}

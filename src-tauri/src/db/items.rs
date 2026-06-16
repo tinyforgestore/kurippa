@@ -217,7 +217,8 @@ pub fn get_history(conn: &Connection, limit: u32) -> Result<Vec<ClipboardItem>> 
         &format!(
             "SELECT {ITEM_COLUMNS} FROM items \
              WHERE folder_id IS NOT NULL \
-                OR id IN (SELECT id FROM items ORDER BY created_at DESC, id DESC LIMIT ?1) \
+                OR pinned = 1 \
+                OR id IN (SELECT id FROM items WHERE pinned = 0 AND folder_id IS NULL ORDER BY created_at DESC, id DESC LIMIT ?1) \
              ORDER BY created_at DESC, id DESC"
         ),
     )?;

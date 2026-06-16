@@ -22,7 +22,15 @@ export function useClipboardHistory() {
 
     const unlistenPromise = listen<ClipboardItem>(CLIPBOARD_UPDATED, (event) => {
       if (Date.now() < ignoringClipboardUpdatesUntil.current) return;
-      setAllItems((prev) => [event.payload, ...prev.filter((i) => i.id !== event.payload.id)].slice(0, HISTORY_DISPLAY_LIMIT));
+      setAllItems((prev) => {
+        const deduped = [event.payload, ...prev.filter((i) => i.id !== event.payload.id)];
+        let regular = 0;
+        return deduped.filter((i) => {
+          if (i.pinned || i.folder_id !== null) return true;
+          regular += 1;
+          return regular <= HISTORY_DISPLAY_LIMIT;
+        });
+      });
     });
 
     const unlistenClearedPromise = listen(HISTORY_CLEARED, () => {
