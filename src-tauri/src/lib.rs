@@ -25,7 +25,7 @@ use tauri_plugin_updater::UpdaterExt;
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let builder = tauri::Builder::default()
         .plugin(
             tauri_plugin_log::Builder::new()
                 .level(log::LevelFilter::Info)
@@ -40,7 +40,12 @@ pub fn run() {
         ))
         .plugin(tauri_plugin_dialog::init())
         .plugin(tauri_plugin_updater::Builder::new().build())
-        .plugin(tauri_plugin_store::Builder::new().build())
+        .plugin(tauri_plugin_store::Builder::new().build());
+
+    #[cfg(target_os = "macos")]
+    let builder = builder.plugin(tauri_nspanel::init());
+
+    builder
         .manage(UpdaterState(Mutex::new(None)))
         .setup(|app| {
             #[cfg(target_os = "macos")]
@@ -127,6 +132,10 @@ pub fn run() {
             // Save position whenever the user drags the main window, so any hide
             // path (hotkey, focus-loss dismiss) always finds an up-to-date value.
             if let Some(main_win) = app.get_webview_window("main") {
+                window::convert_main_to_panel(&main_win);
+                // Dismiss the panel on macOS Space switches (the resign-key
+                // delegate can't catch these because the panel joins all Spaces).
+                window::observe_active_space_changes(app.handle());
                 let move_handle = app.handle().clone();
                 main_win.on_window_event(move |event| {
                     if let tauri::WindowEvent::Moved(pos) = event {

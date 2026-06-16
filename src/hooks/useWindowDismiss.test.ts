@@ -4,6 +4,7 @@ import { createElement } from "react";
 import { Provider, createStore } from "jotai";
 import { StoreProvider } from "@/store";
 import { useWindowDismiss } from "@/hooks/useWindowDismiss";
+import { PANEL_DISMISSED } from "@/constants/events";
 
 function makeWrapper() {
   const store = createStore();
@@ -12,7 +13,9 @@ function makeWrapper() {
 
 const mockHide = vi.fn().mockResolvedValue(undefined);
 const mockUnlisten = vi.fn();
+const mockListenUnlisten = vi.fn();
 let capturedFocusCallback: ((event: { payload: boolean }) => void) | null = null;
+let capturedPanelDismissedCallback: (() => void) | null = null;
 
 vi.mock("@tauri-apps/api/window", () => ({
   getCurrentWindow: () => ({
@@ -21,6 +24,13 @@ vi.mock("@tauri-apps/api/window", () => ({
       capturedFocusCallback = cb;
       return Promise.resolve(mockUnlisten);
     }),
+  }),
+}));
+
+vi.mock("@tauri-apps/api/event", () => ({
+  listen: vi.fn((eventName: string, cb: () => void) => {
+    if (eventName === PANEL_DISMISSED) capturedPanelDismissedCallback = cb;
+    return Promise.resolve(mockListenUnlisten);
   }),
 }));
 
@@ -36,7 +46,9 @@ describe("useWindowDismiss", () => {
   beforeEach(() => {
     mockHide.mockClear();
     mockUnlisten.mockClear();
+    mockListenUnlisten.mockClear();
     capturedFocusCallback = null;
+    capturedPanelDismissedCallback = null;
   });
 
   afterEach(() => {
@@ -189,6 +201,61 @@ describe("useWindowDismiss", () => {
       });
 
       expect(mockHide).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("PANEL_DISMISSED (macOS native resign-key bridge)", () => {
+    it("firing PANEL_DISMISSED clears query to empty string", async () => {
+      const { wrapper } = makeWrapper();
+      const { result } = renderHook(() => useWindowDismiss(), { wrapper });
+
+      // Allow the listen() promise to resolve and capture the callback.
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      // Set a non-empty query first.
+      act(() => {
+        result.current.setQuery("filter text");
+      });
+      expect(result.current.query).toBe("filter text");
+
+      act(() => {
+        capturedPanelDismissedCallback?.();
+      });
+      expect(result.current.query).toBe("");
+    });
+
+    it("firing PANEL_DISMISSED calls hide() (via dismiss)", async () => {
+      const { wrapper } = makeWrapper();
+      renderHook(() => useWindowDismiss(), { wrapper });
+
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      act(() => {
+        capturedPanelDismissedCallback?.();
+      });
+      expect(mockHide).toHaveBeenCalled();
+    });
+
+    it("unsubscribes the PANEL_DISMISSED listener on unmount", async () => {
+      const { wrapper } = makeWrapper();
+      const { unmount } = renderHook(() => useWindowDismiss(), { wrapper });
+
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      unmount();
+
+      // Give the listen() .then() a chance to assign unlisten.
+      await act(async () => {
+        await Promise.resolve();
+      });
+
+      expect(mockListenUnlisten).toHaveBeenCalled();
     });
   });
 

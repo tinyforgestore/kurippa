@@ -7,6 +7,12 @@ edition = "2021"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+# The `panel_delegate!` macro (tauri-nspanel) expands the old `objc` crate's
+# `sel_impl!`, which emits a legacy `#[cfg(feature = "cargo-clippy")]`. Declare
+# that cfg value as expected so it doesn't trip `unexpected_cfgs` in our crate.
+[lints.rust]
+unexpected_cfgs = { level = "warn", check-cfg = ['cfg(feature, values("cargo-clippy"))'] }
+
 [lib]
 # The `_lib` suffix may seem redundant but it is necessary
 # to make the lib name unique and wouldn't conflict with the bin name.
@@ -40,10 +46,15 @@ tokio = { version = "1", features = ["time"] }
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.5"
 objc2-app-kit = { version = "0.2", features = ["NSPasteboard", "NSPasteboardItem", "NSWorkspace", "NSRunningApplication"] }
-objc2-foundation = { version = "0.2", features = ["NSData", "NSString", "NSArray"] }
+objc2-foundation = { version = "0.2", features = ["NSData", "NSString", "NSArray", "NSNotification", "NSOperation", "block2"] }
+# Pinned to the version already resolved transitively via objc2-app-kit 0.2 /
+# objc2 0.5 (see Cargo.lock) — used for the active-space-change RcBlock observer.
+block2 = "=0.5.1"
 core-foundation = "0.10"
 plist = "1"
 core-graphics = { version = "0.24", features = ["highsierra"] }
+cocoa = "0.26"
+tauri-nspanel = { git = "https://github.com/ahkohd/tauri-nspanel", rev = "18ffb9a201fbf6fedfaa382fd4b92315ea30ab1a" }
 
 [target.'cfg(target_os = "windows")'.dependencies]
 windows = { version = "0.61", features = [

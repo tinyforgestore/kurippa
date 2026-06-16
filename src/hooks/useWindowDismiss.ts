@@ -1,8 +1,10 @@
 import { useCallback, useEffect, useRef } from "react";
 import { useSetAtom } from "jotai";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { listen } from "@tauri-apps/api/event";
 import { queryAtom } from "@/atoms/navigation";
 import { pasteAsPreviewTextAtom } from "@/atoms/ui";
+import { PANEL_DISMISSED } from "@/constants/events";
 import { useNavigationStore } from "@/store";
 
 export function useWindowDismiss(onShow?: () => void) {
@@ -49,6 +51,27 @@ export function useWindowDismiss(onShow?: () => void) {
       unlistenFocusPromise.then((unlisten) => unlisten?.()).catch(console.error);
     };
   }, [dismiss, setQuery]);
+
+  // macOS only: tauri-nspanel swizzles NSWindow, breaking onFocusChanged for
+  // focus-loss dismiss. The native resign-key delegate (window.rs) orders the
+  // panel out and emits PANEL_DISMISSED — here we run the same reset dismiss()
+  // does. The panel is already hidden natively; dismiss()'s hide() is a harmless
+  // no-op on an already-hidden window. Only fires on macOS, so it coexists with
+  // the onFocusChanged path (which still drives dismiss on Windows/Linux).
+  useEffect(() => {
+    let unlisten: (() => void) | undefined;
+    listen(PANEL_DISMISSED, () => {
+      dismiss();
+    })
+      .then((fn) => {
+        unlisten = fn;
+      })
+      .catch(console.error);
+
+    return () => {
+      unlisten?.();
+    };
+  }, [dismiss]);
 
   return { query, setQuery, inputRef, dismiss, onDragStart };
 }

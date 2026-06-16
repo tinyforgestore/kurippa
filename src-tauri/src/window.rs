@@ -1,5 +1,7 @@
 #[cfg(target_os = "macos")]
 use std::sync::atomic::{AtomicU32, Ordering};
+#[cfg(target_os = "macos")]
+use tauri::Emitter;
 use tauri::{AppHandle, LogicalPosition, Manager, Monitor, WebviewWindow};
 
 // Cached primary-monitor scale factor × 1000 (macOS only).
@@ -61,6 +63,193 @@ pub fn save_window_pos(app: &AppHandle, x: i32, y: i32) {
     }
 }
 
+/// macOS NSPopUpMenuWindowLevel (Core Graphics window level 101). Raises the
+/// panel above ordinary app windows so it overlays like Spotlight. The
+/// `tauri-nspanel` crate's `set_level` takes a raw i32, so we pass the constant
+/// directly rather than going through an AppKit enum.
+#[cfg(target_os = "macos")]
+const NS_POPUP_MENU_WINDOW_LEVEL: i32 = 101;
+
+/// Converts the pre-warmed main window into a non-activating `NSPanel` so it can
+/// become key on the user's *current* Space — including a fullscreen Space —
+/// without activating the app or forcing a Space switch (Spotlight behavior).
+///
+/// Why a panel and not NSWindow flag-tuning: only a window whose style mask
+/// includes `NSWindowStyleMaskNonactivatingPanel` may become the key window on
+/// a fullscreen Space without app activation. Setting `CanJoinAllSpaces` on an
+/// ordinary NSWindow renders it on the desktop Space, not the active fullscreen
+/// one — which is exactly the bug three prior rounds of flag-tuning hit.
+///
+/// No-op on non-macOS platforms (handled by the cfg'd variant below).
+//
+// `cocoa::appkit::NSWindowCollectionBehavior` is marked deprecated upstream in
+// favour of objc2-app-kit, but `tauri-nspanel`'s `set_collection_behaviour`
+// signature takes exactly this cocoa type — so we must use it here.
+#[cfg(target_os = "macos")]
+#[allow(deprecated)]
+pub fn convert_main_to_panel(window: &WebviewWindow) {
+    use cocoa::appkit::{NSWindow, NSWindowCollectionBehavior};
+    use cocoa::base::id;
+    use tauri_nspanel::{panel_delegate, WebviewWindowExt};
+
+    // NSWindowStyleMaskNonactivatingPanel (1 << 7). cocoa's NSWindowStyleMask
+    // bitflags doesn't define this constant, so use the raw bit.
+    const NONACTIVATING_PANEL_MASK: i32 = 1 << 7;
+
+    // Read the live style mask off the underlying NSWindow BEFORE conversion so
+    // we can OR in NonactivatingPanel while preserving the bits Tauri set for a
+    // transparent, borderless window (e.g. FullSizeContentView). Losing those
+    // would break the transparent rounded-corner rendering.
+    let existing_mask: i32 = match window.ns_window() {
+        Ok(ptr) if !ptr.is_null() => unsafe {
+            let ns_window = ptr as id;
+            ns_window.styleMask().bits() as i32
+        },
+        Ok(_) => {
+            log::warn!("[window] ns_window() returned null before panel conversion; using borderless mask");
+            0
+        }
+        Err(e) => {
+            log::warn!("[window] ns_window() unavailable before panel conversion: {e}; using borderless mask");
+            0
+        }
+    };
+
+    let panel = match window.to_panel() {
+        Ok(p) => p,
+        Err(e) => {
+            log::warn!("[window] to_panel() failed, popup will not overlay fullscreen apps: {e}");
+            return;
+        }
+    };
+
+    // (a) style mask must include NonactivatingPanel (1 << 7 = 128).
+    panel.set_style_mask(existing_mask | NONACTIVATING_PANEL_MASK);
+
+    // (b) collection behaviour: MoveToActiveSpace + FullScreenAuxiliary. The
+    //     panel lives on a single Space and is moved to the active one when
+    //     shown (via panel.show()'s orderFrontRegardless), rather than being
+    //     drawn on every Space like CanJoinAllSpaces. This avoids the flicker
+    //     where the panel briefly appears on the destination Space during a
+    //     Space switch before the activeSpaceDidChange observer dismisses it.
+    //     FullScreenAuxiliary still permits it to appear over fullscreen apps.
+    panel.set_collection_behaviour(
+        NSWindowCollectionBehavior::NSWindowCollectionBehaviorMoveToActiveSpace
+            | NSWindowCollectionBehavior::NSWindowCollectionBehaviorFullScreenAuxiliary,
+    );
+
+    // (c) elevated window level so it sits above ordinary app windows.
+    panel.set_level(NS_POPUP_MENU_WINDOW_LEVEL);
+
+    // We reuse this single panel for the app's lifetime (pre-warm pattern) — do
+    // not let AppKit release it when closed/hidden.
+    panel.set_released_when_closed(false);
+
+    // (d) resign-key delegate: tauri-nspanel swizzles the NSWindow class, which
+    //     breaks Tauri's `onFocusChanged` propagation that the frontend relies on
+    //     for focus-loss dismiss. Bridge it natively — when the panel resigns key
+    //     (user clicks outside / switches Space), order it out and tell the
+    //     frontend to reset transient UI state.
+    //
+    //     NOTE (follow-up): if the panel ever hides immediately on show, add a
+    //     "last shown" timestamp guard to ignore a spurious resign fired during
+    //     show. Not implemented in this pass — clean version only.
+    let app_handle = window.app_handle().clone();
+    let delegate = panel_delegate!(KurippaPanelDelegate {
+        window_did_resign_key
+    });
+    delegate.set_listener(Box::new(move |delegate_name: String| {
+        if delegate_name == "window_did_resign_key" {
+            use tauri_nspanel::ManagerExt;
+            if let Ok(panel) = app_handle.get_webview_panel("main") {
+                panel.order_out(None);
+            }
+            let _ = app_handle.emit(crate::events::PANEL_DISMISSED, ());
+            log::info!("[window] panel resigned key -> dismissed");
+        }
+    }));
+    panel.set_delegate(delegate);
+
+    log::info!("[window] main window converted to NSPanel");
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn convert_main_to_panel(_window: &WebviewWindow) {
+    // Non-macOS: windows already appear over fullscreen apps by default. No-op.
+}
+
+/// Installs an `NSWorkspace` observer that dismisses the panel when the user
+/// switches macOS Spaces — the second half of the Spotlight/Raycast dismiss
+/// model.
+///
+/// Why this is needed in addition to the resign-key delegate: the panel's
+/// collection behaviour (`CanJoinAllSpaces | FullScreenAuxiliary`) means it
+/// renders on *every* Space, so a Space switch never makes it resign key — it
+/// simply "follows" the user onto the new Space. The resign-key delegate alone
+/// therefore cannot catch a Space switch; this active-space observer does.
+///
+/// Visibility guard: only orders out + emits `PANEL_DISMISSED` when the panel
+/// is actually visible. Switching Spaces while Kurippa is hidden is a no-op so
+/// we never emit a spurious dismiss.
+///
+/// No-op on non-macOS platforms (handled by the cfg'd variant below).
+#[cfg(target_os = "macos")]
+pub fn observe_active_space_changes(app: &AppHandle) {
+    use std::ptr::NonNull;
+
+    use block2::RcBlock;
+    use objc2_app_kit::{NSWorkspace, NSWorkspaceActiveSpaceDidChangeNotification};
+    use objc2_foundation::NSNotification;
+    use tauri::Emitter;
+
+    let app_handle = app.clone();
+
+    // The block receives the posted notification. We don't read it — only react
+    // to the fact a Space change occurred.
+    let block = RcBlock::new(move |_notification: NonNull<NSNotification>| {
+        let Some(window) = app_handle.get_webview_window("main") else {
+            return;
+        };
+        // Visibility guard: switching Spaces while hidden must be a no-op.
+        if !window.is_visible().unwrap_or(false) {
+            return;
+        }
+        use tauri_nspanel::ManagerExt;
+        if let Ok(panel) = app_handle.get_webview_panel("main") {
+            panel.order_out(None);
+        }
+        let _ = app_handle.emit(crate::events::PANEL_DISMISSED, ());
+        log::info!("[window] active space changed -> dismissed panel");
+    });
+
+    // SAFETY: NSWorkspace.sharedWorkspace().notificationCenter() is the documented
+    // entry point for workspace notifications; passing nil object/queue delivers
+    // on the posting (main) thread synchronously, which is what we want.
+    unsafe {
+        let workspace = NSWorkspace::sharedWorkspace();
+        let center = workspace.notificationCenter();
+        let observer = center.addObserverForName_object_queue_usingBlock(
+            Some(NSWorkspaceActiveSpaceDidChangeNotification),
+            None,
+            None,
+            &block,
+        );
+        // Intentional app-lifetime leak: there is exactly one main window/panel for
+        // the whole process lifetime, and the observer must outlive this function
+        // or it stops firing. Leaking the block and the returned observer token is
+        // the simplest correct way to keep them alive (no managed-state plumbing).
+        std::mem::forget(block);
+        std::mem::forget(observer);
+    }
+
+    log::info!("[window] installed active-space-change observer");
+}
+
+#[cfg(not(target_os = "macos"))]
+pub fn observe_active_space_changes(_app: &AppHandle) {
+    // Non-macOS: no Spaces concept; nothing to observe. No-op.
+}
+
 pub fn toggle_window(app: &AppHandle) {
     let Some(window) = app.get_webview_window("main") else {
         return;
@@ -75,11 +264,43 @@ pub fn toggle_window(app: &AppHandle) {
             let scale = window.scale_factor().unwrap_or(1.0);
             save_window_pos(app, (pos.x as f64 / scale).round() as i32, (pos.y as f64 / scale).round() as i32);
         }
+        #[cfg(target_os = "macos")]
+        {
+            // Hide via the panel so AppKit tears down key-window state cleanly.
+            use tauri_nspanel::ManagerExt;
+            match app.get_webview_panel("main") {
+                Ok(panel) => panel.order_out(None),
+                Err(_) => {
+                    log::warn!("[window] panel not found on hide; falling back to window.hide()");
+                    let _ = window.hide();
+                }
+            }
+        }
+        #[cfg(not(target_os = "macos"))]
         let _ = window.hide();
     } else {
+        // position_window sets position on the underlying NSWindow, which the
+        // panel shares — so it runs the same on both paths.
         position_window(app, &window);
-        let _ = window.show();
-        let _ = window.set_focus();
+        #[cfg(target_os = "macos")]
+        {
+            // panel.show() orders front on the CURRENT Space (incl. fullscreen)
+            // and makes the panel key — the whole point of the conversion.
+            use tauri_nspanel::ManagerExt;
+            match app.get_webview_panel("main") {
+                Ok(panel) => panel.show(),
+                Err(_) => {
+                    log::warn!("[window] panel not found on show; falling back to window.show()");
+                    let _ = window.show();
+                    let _ = window.set_focus();
+                }
+            }
+        }
+        #[cfg(not(target_os = "macos"))]
+        {
+            let _ = window.show();
+            let _ = window.set_focus();
+        }
     }
 }
 
