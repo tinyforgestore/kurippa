@@ -35,5 +35,5 @@ export type ListEntry =
   | { kind: "pinned-header"; count: number }
   | { kind: "folder-header"; folderId: number; name: string; count: number; expanded: boolean };
 
-export const HISTORY_DISPLAY_LIMIT = 50;
+export const HISTORY_DISPLAY_LIMIT = 500;
 export const FOLDER_NAME_MAX_LENGTH = 30;
