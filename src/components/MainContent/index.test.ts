@@ -1,7 +1,7 @@
 import { render, fireEvent } from "@testing-library/react";
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { createElement, RefObject } from "react";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, useLocation } from "react-router-dom";
 import { MainContent } from "@/components/MainContent/index";
 import { ClipboardItem, Folder, ListEntry } from "@/types";
 
@@ -28,13 +28,28 @@ vi.mock("@/components/SeparatorPicker", () => ({
 }));
 
 vi.mock("@/components/FolderNameInput", () => ({
-  FolderNameInput: (props: { onCancel: () => void; placeholder?: string }) =>
-    createElement(
+  FolderNameInput: (props: { onCancel: () => void; placeholder?: string }) => {
+    const state = useLocation().state as {
+      pickerItemId?: number | null;
+      pickerItemIds?: number[] | null;
+    } | null;
+    return createElement(
       "div",
       { "data-screen": "folderNameInput" },
       createElement("span", { "data-placeholder": true }, props.placeholder ?? ""),
+      createElement(
+        "span",
+        { "data-picker-item-id": true },
+        JSON.stringify(state?.pickerItemId ?? null)
+      ),
+      createElement(
+        "span",
+        { "data-picker-item-ids": true },
+        JSON.stringify(state?.pickerItemIds ?? null)
+      ),
       createElement("button", { "data-action": "cancel", onClick: props.onCancel }, "cancel")
-    ),
+    );
+  },
 }));
 
 vi.mock("@/components/FolderDeleteConfirm", () => ({
@@ -73,6 +88,24 @@ vi.mock("@/components/HistoryList", () => ({
   HistoryList: () => createElement("div", { "data-screen": "history" }),
 }));
 
+vi.mock("@/components/MultiSelectActionMenu", () => ({
+  MultiSelectActionMenu: (props: {
+    count: number;
+    onMerge: () => void;
+    onPinAll: () => void;
+    onMoveToFolder: () => void;
+    onCancel: () => void;
+  }) =>
+    createElement(
+      "div",
+      { "data-screen": "multiAction", "data-count": props.count },
+      createElement("button", { "data-action": "merge", onClick: props.onMerge }, "merge"),
+      createElement("button", { "data-action": "pin", onClick: props.onPinAll }, "pin"),
+      createElement("button", { "data-action": "folder", onClick: props.onMoveToFolder }, "folder"),
+      createElement("button", { "data-action": "cancel", onClick: props.onCancel }, "cancel")
+    ),
+}));
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
@@ -108,6 +141,10 @@ function makeProps(overrides: Partial<Parameters<typeof MainContent>[0]> = {}) {
     confirmFolderDelete: vi.fn(),
     confirmPinnedDelete: vi.fn(),
     unpinAllPinned: vi.fn(),
+    onMultiMerge: vi.fn(),
+    onMultiPinAll: vi.fn(),
+    onMultiMoveToFolder: vi.fn(),
+    moveItemsToFolder: vi.fn(),
     folders: [] as Folder[],
     visibleEntries: [] as ListEntry[],
     moveItemToFolder: vi.fn().mockResolvedValue(undefined),
@@ -185,6 +222,17 @@ describe("MainContent", () => {
     it("renders FolderPicker for /folder-picker route", () => {
       const { container } = renderAt("/folder-picker", { itemId: 5 }, makeProps());
       expect(container.querySelector("[data-screen='folderPicker']")).toBeInTheDocument();
+    });
+
+    it("renders MultiSelectActionMenu for /multi-action route with selection count", () => {
+      const { container } = renderAt(
+        "/multi-action",
+        null,
+        makeProps({ selections: [1, 2, 3] })
+      );
+      const menu = container.querySelector("[data-screen='multiAction']");
+      expect(menu).toBeInTheDocument();
+      expect(menu?.getAttribute("data-count")).toBe("3");
     });
   });
 
@@ -269,7 +317,7 @@ describe("MainContent", () => {
   });
 
   describe("FolderPicker onCreateNewFolder", () => {
-    it("clears folder name input and transitions to /folder-name-input with pickerItemId", () => {
+    it("clears folder name input and transitions to /folder-name-input with pickerItemId (single)", () => {
       const setFolderNameInputValue = vi.fn();
       const { container } = renderAt(
         "/folder-picker",
@@ -279,6 +327,21 @@ describe("MainContent", () => {
       fireEvent.click(container.querySelector("[data-action='create-folder']")!);
       expect(setFolderNameInputValue).toHaveBeenCalledWith("");
       expect(container.querySelector("[data-screen='folderNameInput']")).toBeInTheDocument();
+      expect(container.querySelector("[data-picker-item-id]")?.textContent).toBe("42");
+      expect(container.querySelector("[data-picker-item-ids]")?.textContent).toBe("null");
+    });
+
+    it("multi-mode carries pickerItemIds (not pickerItemId: 0) to /folder-name-input", () => {
+      const { container } = renderAt(
+        "/folder-picker",
+        { itemIds: [1, 2, 3] },
+        makeProps()
+      );
+      fireEvent.click(container.querySelector("[data-action='create-folder']")!);
+      expect(container.querySelector("[data-screen='folderNameInput']")).toBeInTheDocument();
+      expect(container.querySelector("[data-picker-item-ids]")?.textContent).toBe("[1,2,3]");
+      // Must NOT pass the sentinel item 0 that would drop the multi-selection.
+      expect(container.querySelector("[data-picker-item-id]")?.textContent).toBe("null");
     });
   });
 
@@ -318,6 +381,40 @@ describe("MainContent", () => {
       fireEvent.click(container.querySelector("[data-action='remove-folder']")!);
       expect(removeItemFromFolder).toHaveBeenCalledWith(7);
       expect(container.querySelector("[data-screen='history']")).toBeInTheDocument();
+    });
+
+    it("multi-mode onSelectFolder calls moveItemsToFolder with the id set (not moveItemToFolder)", () => {
+      const moveItemsToFolder = vi.fn();
+      const moveItemToFolder = vi.fn().mockResolvedValue(undefined);
+      const { container } = renderAt(
+        "/folder-picker",
+        { itemIds: [1, 2, 3] },
+        makeProps({ moveItemsToFolder, moveItemToFolder })
+      );
+      fireEvent.click(container.querySelector("[data-action='select-folder']")!);
+      expect(moveItemsToFolder).toHaveBeenCalledWith([1, 2, 3], 99);
+      expect(moveItemToFolder).not.toHaveBeenCalled();
+    });
+
+    it("multi-action merge button fires onMultiMerge", () => {
+      const onMultiMerge = vi.fn();
+      const { container } = renderAt("/multi-action", null, makeProps({ onMultiMerge, selections: [1, 2] }));
+      fireEvent.click(container.querySelector("[data-action='merge']")!);
+      expect(onMultiMerge).toHaveBeenCalledOnce();
+    });
+
+    it("multi-action pin button fires onMultiPinAll", () => {
+      const onMultiPinAll = vi.fn();
+      const { container } = renderAt("/multi-action", null, makeProps({ onMultiPinAll, selections: [1, 2] }));
+      fireEvent.click(container.querySelector("[data-action='pin']")!);
+      expect(onMultiPinAll).toHaveBeenCalledOnce();
+    });
+
+    it("multi-action folder button fires onMultiMoveToFolder", () => {
+      const onMultiMoveToFolder = vi.fn();
+      const { container } = renderAt("/multi-action", null, makeProps({ onMultiMoveToFolder, selections: [1, 2] }));
+      fireEvent.click(container.querySelector("[data-action='folder']")!);
+      expect(onMultiMoveToFolder).toHaveBeenCalledOnce();
     });
 
     it("currentFolderId is resolved from visibleEntries matching itemId in route state", () => {

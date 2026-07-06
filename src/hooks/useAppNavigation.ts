@@ -7,14 +7,18 @@ export function useAppNavigation() {
     toHistory: () => navigate("/"),
     toPasteAs: (item: ClipboardItem) => navigate("/paste-as", { state: { item } }),
     toSeparatorPicker: () => navigate("/separator-picker"),
+    toMultiAction: () => navigate("/multi-action"),
     toFolderNameInput: (
       mode: "create" | "rename" | "convert-pinned",
       targetId: number | null,
-      pickerItemId: number | null
-    ) => navigate("/folder-name-input", { state: { mode, targetId, pickerItemId } }),
+      pickerItemId: number | null,
+      pickerItemIds: number[] | null = null
+    ) => navigate("/folder-name-input", { state: { mode, targetId, pickerItemId, pickerItemIds } }),
     toFolderDelete: (target: { id: number; name: string }) =>
       navigate("/folder-delete", { state: { target } }),
     toFolderPicker: (itemId: number) => navigate("/folder-picker", { state: { itemId } }),
+    toFolderPickerMulti: (itemIds: number[]) =>
+      navigate("/folder-picker", { state: { itemIds } }),
     toPinnedDelete: (count: number) => navigate("/pinned-delete", { state: { count } }),
   };
 }

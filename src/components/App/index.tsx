@@ -53,6 +53,10 @@ function App() {
     confirmFolderDelete,
     confirmPinnedDelete,
     unpinAllPinned,
+    onMultiMerge,
+    onMultiPinAll,
+    onMultiMoveToFolder,
+    moveItemsToFolder,
     moveItemToFolder,
     removeItemFromFolder,
     expandedFolderId,
@@ -128,6 +132,10 @@ function App() {
           confirmFolderDelete={confirmFolderDelete}
           confirmPinnedDelete={confirmPinnedDelete}
           unpinAllPinned={unpinAllPinned}
+          onMultiMerge={onMultiMerge}
+          onMultiPinAll={onMultiPinAll}
+          onMultiMoveToFolder={onMultiMoveToFolder}
+          moveItemsToFolder={moveItemsToFolder}
           folders={folders}
           visibleEntries={visibleEntries}
           moveItemToFolder={moveItemToFolder}

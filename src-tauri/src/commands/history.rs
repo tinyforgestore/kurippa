@@ -23,6 +23,13 @@ pub fn pin_item(state: tauri::State<DbState>, id: i64) -> Result<(), String> {
     db::pin_item(&conn, id).map_err(|e| e.to_string())
 }
 
+/// Pin every clipboard item in `ids`. FREE tier — pinning is not gated.
+#[tauri::command]
+pub fn pin_items(state: tauri::State<DbState>, ids: Vec<i64>) -> Result<(), String> {
+    let conn = state.lock().map_err(|e| e.to_string())?;
+    db::pin_items(&conn, &ids).map_err(|e| e.to_string())
+}
+
 /// Unpin a clipboard item by id.
 #[tauri::command]
 pub fn unpin_item(state: tauri::State<DbState>, id: i64) -> Result<(), String> {

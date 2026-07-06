@@ -52,7 +52,7 @@ describe("useAppNavigation", () => {
     const { result } = renderHook(() => useAppNavigation());
     result.current.toFolderNameInput("rename", 7, 42);
     expect(navigateMock).toHaveBeenCalledWith("/folder-name-input", {
-      state: { mode: "rename", targetId: 7, pickerItemId: 42 },
+      state: { mode: "rename", targetId: 7, pickerItemId: 42, pickerItemIds: null },
     });
   });
 
@@ -60,7 +60,29 @@ describe("useAppNavigation", () => {
     const { result } = renderHook(() => useAppNavigation());
     result.current.toFolderNameInput("create", null, null);
     expect(navigateMock).toHaveBeenCalledWith("/folder-name-input", {
-      state: { mode: "create", targetId: null, pickerItemId: null },
+      state: { mode: "create", targetId: null, pickerItemId: null, pickerItemIds: null },
+    });
+  });
+
+  it("toFolderNameInput carries pickerItemIds for the multi path", () => {
+    const { result } = renderHook(() => useAppNavigation());
+    result.current.toFolderNameInput("create", null, null, [1, 2, 3]);
+    expect(navigateMock).toHaveBeenCalledWith("/folder-name-input", {
+      state: { mode: "create", targetId: null, pickerItemId: null, pickerItemIds: [1, 2, 3] },
+    });
+  });
+
+  it("toMultiAction navigates to /multi-action", () => {
+    const { result } = renderHook(() => useAppNavigation());
+    result.current.toMultiAction();
+    expect(navigateMock).toHaveBeenCalledWith("/multi-action");
+  });
+
+  it("toFolderPickerMulti navigates with itemIds state", () => {
+    const { result } = renderHook(() => useAppNavigation());
+    result.current.toFolderPickerMulti([1, 2, 3]);
+    expect(navigateMock).toHaveBeenCalledWith("/folder-picker", {
+      state: { itemIds: [1, 2, 3] },
     });
   });
 

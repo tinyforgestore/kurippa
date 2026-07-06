@@ -9,6 +9,7 @@ import { FolderDeleteConfirm } from "@/components/FolderDeleteConfirm";
 import { FolderPicker } from "@/components/FolderPicker";
 import { HistoryList } from "@/components/HistoryList";
 import { PinnedDeleteConfirm } from "@/components/PinnedDeleteConfirm";
+import { MultiSelectActionMenu } from "@/components/MultiSelectActionMenu";
 
 interface MainContentProps {
   executePasteOption: (opt: PasteOption) => void;
@@ -22,6 +23,10 @@ interface MainContentProps {
   confirmFolderDelete: (del: boolean) => void;
   confirmPinnedDelete: () => void;
   unpinAllPinned: () => void;
+  onMultiMerge: () => void;
+  onMultiPinAll: () => void;
+  onMultiMoveToFolder: () => void;
+  moveItemsToFolder: (ids: number[], folderId: number) => void;
   folders: Folder[];
   visibleEntries: ListEntry[];
   moveItemToFolder: (itemId: number, folderId: number) => Promise<void>;
@@ -53,6 +58,10 @@ export function MainContent({
   confirmFolderDelete,
   confirmPinnedDelete,
   unpinAllPinned,
+  onMultiMerge,
+  onMultiPinAll,
+  onMultiMoveToFolder,
+  moveItemsToFolder,
   folders,
   visibleEntries,
   moveItemToFolder,
@@ -139,34 +148,59 @@ export function MainContent({
       <Route
         path="/folder-picker"
         element={(() => {
-          const itemId = (location.state as { itemId: number } | null)?.itemId ?? 0;
+          const state = location.state as { itemId?: number; itemIds?: number[] } | null;
+          const itemIds = state?.itemIds ?? null;
+          const isMulti = itemIds !== null && itemIds.length > 0;
+          const itemId = state?.itemId ?? 0;
           const pickerEntry = visibleEntries.find(
             (e) => e.kind === "item" && e.result.item.id === itemId
           );
           const currentFolderId =
-            pickerEntry?.kind === "item" ? (pickerEntry.result.item.folder_id ?? null) : null;
+            !isMulti && pickerEntry?.kind === "item"
+              ? (pickerEntry.result.item.folder_id ?? null)
+              : null;
           return (
             <FolderPicker
               folders={folders}
               currentFolderId={currentFolderId}
               onSelectFolder={(folderId) => {
-                moveItemToFolder(itemId, folderId);
-                navigate("/");
+                if (isMulti) {
+                  // Multi path does not navigate("/") here: moveItemsToFolder (in
+                  // useAppState) already calls nav.toHistory() after the invoke resolves.
+                  moveItemsToFolder(itemIds, folderId);
+                } else {
+                  moveItemToFolder(itemId, folderId);
+                  navigate("/");
+                }
               }}
               onRemoveFromFolder={() => {
-                removeItemFromFolder(itemId);
+                if (!isMulti) removeItemFromFolder(itemId);
                 navigate("/");
               }}
               onCreateNewFolder={() => {
                 setFolderNameInputValue("");
                 navigate("/folder-name-input", {
-                  state: { mode: "create", targetId: null, pickerItemId: itemId },
+                  state: isMulti
+                    ? { mode: "create", targetId: null, pickerItemId: null, pickerItemIds: itemIds }
+                    : { mode: "create", targetId: null, pickerItemId: itemId, pickerItemIds: null },
                 });
               }}
               onCancel={() => navigate("/")}
             />
           );
         })()}
+      />
+      <Route
+        path="/multi-action"
+        element={
+          <MultiSelectActionMenu
+            count={selections.length}
+            onMerge={onMultiMerge}
+            onPinAll={onMultiPinAll}
+            onMoveToFolder={onMultiMoveToFolder}
+            onCancel={() => navigate("/")}
+          />
+        }
       />
       <Route
         path="*"

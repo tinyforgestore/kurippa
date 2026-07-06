@@ -100,6 +100,21 @@ pub fn pin_item(conn: &Connection, id: i64) -> Result<()> {
     Ok(())
 }
 
+/// Pin every item in `ids` (idempotent for already-pinned). Clears folder_id
+/// on each to preserve the pin XOR folder invariant. Atomic: all updates commit
+/// together or none do.
+pub fn pin_items(conn: &Connection, ids: &[i64]) -> Result<()> {
+    if ids.is_empty() {
+        return Ok(());
+    }
+    let tx = conn.unchecked_transaction()?;
+    for id in ids {
+        tx.execute("UPDATE items SET pinned = 1, folder_id = NULL WHERE id = ?1", params![id])?;
+    }
+    tx.commit()?;
+    Ok(())
+}
+
 /// Set `pinned = 0` on the item with the given id.
 pub fn unpin_item(conn: &Connection, id: i64) -> Result<()> {
     conn.execute("UPDATE items SET pinned = 0 WHERE id = ?1", params![id])?;

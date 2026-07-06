@@ -19,6 +19,7 @@ import { usePasteActions } from "@/hooks/usePasteActions";
 import { useAppKeyboard } from "@/hooks/useAppKeyboard";
 import { useAppNavigation } from "@/hooks/useAppNavigation";
 import { ClipboardItem } from "@/types";
+import { TRIAL_ERROR } from "@/constants/errors";
 import { updateInfoAtom, pasteAsPreviewTextAtom } from "@/atoms/ui";
 import { selectedIndexAtom } from "@/atoms/navigation";
 import { useClipboardStore, useNavigationStore, useUIStore } from "@/store";
@@ -86,11 +87,25 @@ export function useAppState({ onTrialError, isActivated = false }: UseAppStatePa
 
   const clearConfirm = useClearConfirm({ clearNonPinned });
 
+  const moveItemsToFolder = useCallback((ids: number[], folderId: number) => {
+    invoke("move_items_to_folder", { ids, folderId })
+      .then(() => {
+        multiSelect.exitMode();
+        reloadHistory();
+        nav.toHistory();
+      })
+      .catch((err: string) => {
+        if (err === TRIAL_ERROR) onTrialError?.("Folder organisation");
+        else console.error(err);
+      });
+  }, [multiSelect, reloadHistory, nav, onTrialError]);
+
   const folderActions = useFolderActions({
     createFolder,
     renameFolder,
     deleteFolder,
     moveItemToFolder: _moveItemToFolder,
+    moveItemsToFolder,
     removeItemFromFolder: _removeItemFromFolder,
     loadFolders,
     reloadHistory,
@@ -169,6 +184,24 @@ export function useAppState({ onTrialError, isActivated = false }: UseAppStatePa
       .catch(console.error);
   }, [nav, reloadHistory]);
 
+  const onMultiMerge = useCallback(() => {
+    nav.toSeparatorPicker();
+  }, [nav]);
+
+  const onMultiPinAll = useCallback(() => {
+    invoke("pin_items", { ids: multiSelect.selections })
+      .then(() => {
+        multiSelect.exitMode();
+        reloadHistory();
+        nav.toHistory();
+      })
+      .catch(console.error);
+  }, [multiSelect, reloadHistory, nav]);
+
+  const onMultiMoveToFolder = useCallback(() => {
+    nav.toFolderPickerMulti(multiSelect.selections);
+  }, [nav, multiSelect]);
+
   const { listRef, pasteSelected, deletingId } = useItemSelection(
     undefined,
     dismiss,
@@ -240,6 +273,10 @@ export function useAppState({ onTrialError, isActivated = false }: UseAppStatePa
     confirmFolderDelete: folderActions.confirmFolderDelete,
     confirmPinnedDelete,
     unpinAllPinned,
+    onMultiMerge,
+    onMultiPinAll,
+    onMultiMoveToFolder,
+    moveItemsToFolder,
     moveItemToFolder: folderActions.moveItemToFolder,
     removeItemFromFolder: folderActions.removeItemFromFolder,
     expandedFolderId,

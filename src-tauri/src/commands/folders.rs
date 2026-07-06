@@ -87,6 +87,20 @@ pub fn move_item_to_folder(
 }
 
 #[tauri::command]
+pub fn move_items_to_folder(
+    app: tauri::AppHandle,
+    state: tauri::State<DbState>,
+    ids: Vec<i64>,
+    folder_id: i64,
+) -> Result<(), String> {
+    if !license::is_activated(&app) {
+        return Err(license::TRIAL_ERROR.into());
+    }
+    let conn = state.lock().map_err(|e| e.to_string())?;
+    db::move_items_to_folder(&conn, &ids, folder_id).map_err(|e| e.to_string())
+}
+
+#[tauri::command]
 pub fn remove_item_from_folder(
     app: tauri::AppHandle,
     state: tauri::State<DbState>,

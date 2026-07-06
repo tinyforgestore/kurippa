@@ -102,7 +102,8 @@ export function useAppKeyboard({
         return;
       }
 
-      if (e.key === " " && multiSelect.active && location.pathname !== "/separator-picker") {
+      // Multi-select keys fire only on the history root; /multi-action and /separator-picker own their own keyboards.
+      if (e.key === " " && multiSelect.active && location.pathname === "/") {
         e.preventDefault();
         const currentEntry = visibleEntries[selectedIndexRef.current];
         if (currentEntry && currentEntry.kind === "item") {
@@ -112,7 +113,7 @@ export function useAppKeyboard({
         return;
       }
 
-      if (e.key === "Enter" && multiSelect.active && location.pathname !== "/separator-picker") {
+      if (e.key === "Enter" && multiSelect.active && location.pathname === "/") {
         e.preventDefault();
         if (multiSelect.selections.length === 1) {
           const itemId = multiSelect.selections[0];
@@ -127,12 +128,12 @@ export function useAppKeyboard({
             dismiss();
           }
         } else if (multiSelect.selections.length >= 2) {
-          nav.toSeparatorPicker();
+          nav.toMultiAction();
         }
         return;
       }
 
-      if (e.key === "Escape" && multiSelect.active && location.pathname !== "/separator-picker") {
+      if (e.key === "Escape" && multiSelect.active && location.pathname === "/") {
         e.preventDefault();
         multiSelect.exitMode();
         return;

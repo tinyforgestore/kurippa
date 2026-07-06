@@ -97,6 +97,20 @@ pub fn move_item_to_folder(conn: &Connection, item_id: i64, folder_id: i64) -> R
     Ok(())
 }
 
+/// Move every item in `ids` into `folder_id` (clears pinned on each). Atomic:
+/// all updates commit together or none do.
+pub fn move_items_to_folder(conn: &Connection, ids: &[i64], folder_id: i64) -> Result<()> {
+    if ids.is_empty() {
+        return Ok(());
+    }
+    let tx = conn.unchecked_transaction()?;
+    for id in ids {
+        tx.execute("UPDATE items SET folder_id = ?1, pinned = 0 WHERE id = ?2", params![folder_id, id])?;
+    }
+    tx.commit()?;
+    Ok(())
+}
+
 pub fn remove_item_from_folder(conn: &Connection, item_id: i64) -> Result<()> {
     conn.execute("UPDATE items SET folder_id = NULL WHERE id = ?1", params![item_id])?;
     Ok(())
@@ -420,6 +434,56 @@ mod tests {
         let folder = convert_pinned_to_folder(&conn, "Pinned", 2000)
             .expect("convert_pinned_to_folder");
         assert_eq!(folder.position, 1, "should be assigned next position");
+    }
+
+    // ------------------------------------------------------------------
+    // move_items_to_folder()
+    // ------------------------------------------------------------------
+
+    #[test]
+    fn move_items_to_folder_sets_folder_and_clears_pinned() {
+        let conn = in_memory_db();
+        let folder = create_folder(&conn, "Dest", 1000).expect("create folder");
+
+        // Two pinned items to move, plus an untouched pinned item.
+        let mut a = make_item("a", 1000);
+        a.pinned = true;
+        let (a_id, _) = insert_item(&conn, &a).expect("insert a");
+
+        let mut b = make_item("b", 2000);
+        b.pinned = true;
+        let (b_id, _) = insert_item(&conn, &b).expect("insert b");
+
+        let mut untouched = make_item("untouched", 3000);
+        untouched.pinned = true;
+        let (untouched_id, _) = insert_item(&conn, &untouched).expect("insert untouched");
+
+        let ids = vec![a_id, b_id];
+        // Atomic: transaction wraps every UPDATE (see move_items_to_folder).
+        move_items_to_folder(&conn, &ids, folder.id).expect("move_items_to_folder should succeed");
+
+        for id in &ids {
+            let (folder_id, pinned): (Option<i64>, i32) = conn
+                .query_row(
+                    "SELECT folder_id, pinned FROM items WHERE id = ?1",
+                    rusqlite::params![id],
+                    |r| Ok((r.get(0)?, r.get(1)?)),
+                )
+                .expect("query moved item");
+            assert_eq!(folder_id, Some(folder.id), "id {id} should be in the folder");
+            assert_eq!(pinned, 0, "id {id} should be unpinned");
+        }
+
+        // The untouched pinned item keeps its pin and has no folder.
+        let (u_folder, u_pinned): (Option<i64>, i32) = conn
+            .query_row(
+                "SELECT folder_id, pinned FROM items WHERE id = ?1",
+                rusqlite::params![untouched_id],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .expect("query untouched item");
+        assert!(u_folder.is_none(), "untouched item must have no folder");
+        assert_eq!(u_pinned, 1, "untouched item must stay pinned");
     }
 
     #[test]

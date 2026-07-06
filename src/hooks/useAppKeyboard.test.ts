@@ -21,9 +21,11 @@ const mockNav = {
   toHistory: vi.fn(),
   toPasteAs: vi.fn(),
   toSeparatorPicker: vi.fn(),
+  toMultiAction: vi.fn(),
   toFolderNameInput: vi.fn(),
   toFolderDelete: vi.fn(),
   toFolderPicker: vi.fn(),
+  toFolderPickerMulti: vi.fn(),
 };
 vi.mock("@/hooks/useAppNavigation", () => ({ useAppNavigation: () => mockNav }));
 
@@ -204,11 +206,12 @@ describe("useAppKeyboard", () => {
     expect(dismiss).toHaveBeenCalledOnce();
   });
 
-  it("Enter in multiselect with 2+ selections opens separator picker", () => {
+  it("Enter in multiselect with 2+ selections opens the multi-action menu", () => {
     const multiSelect = makeMultiSelect({ active: true, selections: [1, 2] });
     renderHook(() => useAppKeyboard(makeConfig({ multiSelect })), makeWrapper());
     fireKey("Enter");
-    expect(mockNav.toSeparatorPicker).toHaveBeenCalledOnce();
+    expect(mockNav.toMultiAction).toHaveBeenCalledOnce();
+    expect(mockNav.toSeparatorPicker).not.toHaveBeenCalled();
   });
 
   it("Escape in multiselect exits multiselect", () => {

@@ -13,6 +13,7 @@ interface UseFolderActionsParams {
   renameFolder: (id: number, name: string) => Promise<void | undefined>;
   deleteFolder: (id: number, deleteItems: boolean) => Promise<void | undefined>;
   moveItemToFolder: (itemId: number, folderId: number) => Promise<unknown>;
+  moveItemsToFolder: (ids: number[], folderId: number) => void;
   removeItemFromFolder: (itemId: number) => Promise<unknown>;
   loadFolders: () => void;
   reloadHistory: () => void;
@@ -24,6 +25,7 @@ export function useFolderActions({
   renameFolder,
   deleteFolder,
   moveItemToFolder: _moveItemToFolder,
+  moveItemsToFolder: _moveItemsToFolder,
   removeItemFromFolder: _removeItemFromFolder,
   loadFolders,
   reloadHistory,
@@ -46,25 +48,37 @@ export function useFolderActions({
 
   const confirmFolderNameInput = useCallback(() => {
     if (location.pathname !== "/folder-name-input") return;
-    const { mode, targetId, pickerItemId } = location.state as {
+    const { mode, targetId, pickerItemId, pickerItemIds } = location.state as {
       mode: "create" | "rename" | "convert-pinned";
       targetId: number | null;
       pickerItemId: number | null;
+      pickerItemIds: number[] | null;
     };
     const name = folderNameInputValue.trim();
     nav.toHistory();
     setFolderNameInputValue("");
     if (!name) return;
     if (mode === "create") {
-      createFolder(name)
-        .then((newFolder) => {
-          if (pickerItemId !== null) {
-            return _moveItemToFolder(pickerItemId, newFolder.id);
-          }
-        })
-        .then(() => loadFolders())
-        .then(() => reloadHistory())
-        .catch(console.error);
+      if (pickerItemIds && pickerItemIds.length > 0) {
+        // Multi-select "New folder…" path: create the folder, then move the whole
+        // selection into it. _moveItemsToFolder handles exit-mode + reload + nav.
+        createFolder(name)
+          .then((newFolder) => {
+            loadFolders();
+            _moveItemsToFolder(pickerItemIds, newFolder.id);
+          })
+          .catch(console.error);
+      } else {
+        createFolder(name)
+          .then((newFolder) => {
+            if (pickerItemId !== null) {
+              return _moveItemToFolder(pickerItemId, newFolder.id);
+            }
+          })
+          .then(() => loadFolders())
+          .then(() => reloadHistory())
+          .catch(console.error);
+      }
     } else if (mode === "rename" && targetId !== null) {
       renameFolder(targetId, name)
         .then(() => loadFolders())
@@ -86,7 +100,7 @@ export function useFolderActions({
           }
         });
     }
-  }, [location, nav, folderNameInputValue, createFolder, _moveItemToFolder, renameFolder, loadFolders, reloadHistory, setFolderNameInputValue, setFolders, setMaxFoldersToast, onTrialError]);
+  }, [location, nav, folderNameInputValue, createFolder, _moveItemToFolder, _moveItemsToFolder, renameFolder, loadFolders, reloadHistory, setFolderNameInputValue, setFolders, setMaxFoldersToast, onTrialError]);
 
   const confirmFolderDelete = useCallback((deleteItems: boolean) => {
     if (location.pathname !== "/folder-delete") return;

@@ -44,6 +44,7 @@ function makeParams(overrides: Partial<Parameters<typeof useFolderActions>[0]> =
     renameFolder: vi.fn().mockResolvedValue(undefined),
     deleteFolder: vi.fn().mockResolvedValue(undefined),
     moveItemToFolder: vi.fn().mockResolvedValue(undefined),
+    moveItemsToFolder: vi.fn(),
     removeItemFromFolder: vi.fn().mockResolvedValue(undefined),
     loadFolders: vi.fn().mockResolvedValue(undefined),
     reloadHistory: vi.fn(),
@@ -126,6 +127,27 @@ describe("useFolderActions", () => {
       act(() => result.current.setFolderNameInputValue("Work"));
       await act(() => { result.current.confirmFolderNameInput(); });
       expect(params.moveItemToFolder).toHaveBeenCalledWith(7, 42);
+    });
+
+    it("create mode with pickerItemIds (multi): moves the whole selection into the new folder", async () => {
+      mockPathname = "/folder-name-input";
+      mockState = { mode: "create", targetId: null, pickerItemId: null, pickerItemIds: [1, 2, 3] };
+      const newFolder = makeFolder(42);
+      const params = makeParams({
+        createFolder: vi.fn().mockResolvedValue(newFolder),
+      });
+      const { wrapper } = makeWrapper();
+      const { result } = renderHook(() => useFolderActions(params), { wrapper });
+      act(() => result.current.setFolderNameInputValue("Work"));
+      await act(async () => {
+        result.current.confirmFolderNameInput();
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      expect(params.createFolder).toHaveBeenCalledWith("Work");
+      expect(params.moveItemsToFolder).toHaveBeenCalledWith([1, 2, 3], 42);
+      expect(params.moveItemToFolder).not.toHaveBeenCalled();
+      expect(params.loadFolders).toHaveBeenCalledOnce();
     });
 
     it("rename mode: calls renameFolder with targetId", async () => {

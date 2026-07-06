@@ -654,3 +654,122 @@ fn get_history_limit_applies_only_to_regular_items() {
     assert_eq!(folder_items, 5, "all folder items must be included");
     assert_eq!(rows.len(), 12);
 }
+
+// ------------------------------------------------------------------
+// pin_items()
+// ------------------------------------------------------------------
+
+#[test]
+fn pin_items_sets_pinned_and_clears_folder_on_all() {
+    let conn = in_memory_db();
+    let folder = create_folder(&conn, "Bucket", 500).expect("create_folder");
+
+    // One plain item, one already in a folder, one already pinned.
+    let plain = make_item("plain", 1_000, false);
+    let (plain_id, _) = insert_item(&conn, &plain).expect("insert plain");
+
+    let mut in_folder = make_item("in-folder", 2_000, false);
+    in_folder.folder_id = Some(folder.id);
+    let (folder_item_id, _) = insert_item(&conn, &in_folder).expect("insert folder item");
+
+    let already_pinned = make_item("already-pinned", 3_000, true);
+    let (pinned_id, _) = insert_item(&conn, &already_pinned).expect("insert pinned");
+
+    // An untouched item that must NOT be affected.
+    let mut untouched = make_item("untouched", 4_000, false);
+    untouched.folder_id = Some(folder.id);
+    let (untouched_id, _) = insert_item(&conn, &untouched).expect("insert untouched");
+
+    let ids = vec![plain_id, folder_item_id, pinned_id];
+    // pin_items is exposed via `use super::*` (items module).
+    pin_items(&conn, &ids).expect("pin_items should succeed");
+
+    for id in &ids {
+        let (pinned, folder_id): (i32, Option<i64>) = conn
+            .query_row(
+                "SELECT pinned, folder_id FROM items WHERE id = ?1",
+                rusqlite::params![id],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .expect("query pinned item");
+        assert_eq!(pinned, 1, "id {id} should be pinned");
+        assert!(folder_id.is_none(), "id {id} should have folder_id cleared");
+    }
+
+    // The untouched item keeps its folder and stays unpinned.
+    let (u_pinned, u_folder): (i32, Option<i64>) = conn
+        .query_row(
+            "SELECT pinned, folder_id FROM items WHERE id = ?1",
+            rusqlite::params![untouched_id],
+            |r| Ok((r.get(0)?, r.get(1)?)),
+        )
+        .expect("query untouched item");
+    assert_eq!(u_pinned, 0, "untouched item must not be pinned");
+    assert_eq!(u_folder, Some(folder.id), "untouched item keeps its folder");
+}
+
+#[test]
+fn pin_items_empty_ids_is_noop() {
+    let conn = in_memory_db();
+    let item = make_item("keep", 1_000, false);
+    let (id, _) = insert_item(&conn, &item).expect("insert");
+
+    pin_items(&conn, &[]).expect("pin_items with empty ids should succeed");
+
+    let pinned: i32 = conn
+        .query_row(
+            "SELECT pinned FROM items WHERE id = ?1",
+            rusqlite::params![id],
+            |r| r.get(0),
+        )
+        .expect("query pinned");
+    assert_eq!(pinned, 0, "empty pin_items must not pin anything");
+}
+
+// ------------------------------------------------------------------
+// move_items_to_folder()
+// ------------------------------------------------------------------
+
+#[test]
+fn move_items_to_folder_moves_all_and_clears_pinned() {
+    let conn = in_memory_db();
+    let folder = create_folder(&conn, "Bucket", 500).expect("create_folder");
+
+    let a = make_item("a", 1_000, false);
+    let (a_id, _) = insert_item(&conn, &a).expect("insert a");
+    let b = make_item("b", 2_000, true);
+    let (b_id, _) = insert_item(&conn, &b).expect("insert b");
+
+    move_items_to_folder(&conn, &[a_id, b_id], folder.id).expect("move_items_to_folder");
+
+    for id in [a_id, b_id] {
+        let (folder_id, pinned): (Option<i64>, i32) = conn
+            .query_row(
+                "SELECT folder_id, pinned FROM items WHERE id = ?1",
+                rusqlite::params![id],
+                |r| Ok((r.get(0)?, r.get(1)?)),
+            )
+            .expect("query moved item");
+        assert_eq!(folder_id, Some(folder.id), "id {id} should be in the folder");
+        assert_eq!(pinned, 0, "id {id} should be unpinned");
+    }
+}
+
+#[test]
+fn move_items_to_folder_empty_ids_is_noop() {
+    let conn = in_memory_db();
+    let folder = create_folder(&conn, "Bucket", 500).expect("create_folder");
+    let item = make_item("keep", 1_000, false);
+    let (id, _) = insert_item(&conn, &item).expect("insert");
+
+    move_items_to_folder(&conn, &[], folder.id).expect("empty move should succeed");
+
+    let folder_id: Option<i64> = conn
+        .query_row(
+            "SELECT folder_id FROM items WHERE id = ?1",
+            rusqlite::params![id],
+            |r| r.get(0),
+        )
+        .expect("query folder_id");
+    assert!(folder_id.is_none(), "empty move must not touch any item");
+}
