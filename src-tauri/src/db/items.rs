@@ -1,7 +1,14 @@
 use rusqlite::{Connection, OptionalExtension, Result, params};
 
-use super::types::ClipboardItem;
+use super::types::{kind, ClipboardItem};
 use super::MAX_HISTORY;
+
+/// Image metadata needed to composite images, as returned by `get_item_images`.
+pub struct ImageMeta {
+    pub image_path: String,
+    pub width: u32,
+    pub height: u32,
+}
 
 const ITEM_COLUMNS: &str =
     "id, kind, text, html, rtf, image_path, source_app, created_at, \
@@ -263,6 +270,42 @@ pub fn get_item_texts(conn: &Connection, ids: &[i64]) -> Result<Vec<String>> {
         .filter_map(|(id, text)| {
             text.filter(|t| !t.is_empty()).map(|t| (id, t))
         })
+        .collect();
+    Ok(ids.iter().filter_map(|id| map.remove(id)).collect())
+}
+
+/// Fetch image metadata for items by their IDs, preserving the input order.
+/// Ids that don't resolve to an image row with a complete path/width/height
+/// are skipped (not included in the result).
+pub fn get_item_images(conn: &Connection, ids: &[i64]) -> Result<Vec<ImageMeta>> {
+    if ids.is_empty() {
+        return Ok(Vec::new());
+    }
+    let placeholders = ids
+        .iter()
+        .enumerate()
+        .map(|(i, _)| format!("?{}", i + 1))
+        .collect::<Vec<_>>()
+        .join(", ");
+    let sql = format!(
+        "SELECT id, image_path, image_width, image_height FROM items \
+         WHERE id IN ({placeholders}) AND kind = '{kind}' \
+         AND image_path IS NOT NULL AND image_width IS NOT NULL AND image_height IS NOT NULL",
+        kind = kind::IMAGE,
+    );
+    let mut stmt = conn.prepare(&sql)?;
+    let mut map: std::collections::HashMap<i64, ImageMeta> = stmt
+        .query_map(rusqlite::params_from_iter(ids.iter()), |row| {
+            Ok((
+                row.get::<_, i64>(0)?,
+                ImageMeta {
+                    image_path: row.get::<_, String>(1)?,
+                    width: row.get::<_, i64>(2)? as u32,
+                    height: row.get::<_, i64>(3)? as u32,
+                },
+            ))
+        })?
+        .filter_map(|r| r.ok())
         .collect();
     Ok(ids.iter().filter_map(|id| map.remove(id)).collect())
 }

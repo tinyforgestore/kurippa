@@ -16,9 +16,11 @@ function makeProps(overrides: Partial<Parameters<typeof MultiSelectActionMenu>[0
   return {
     count: 3,
     onMerge: vi.fn(),
+    onCombine: vi.fn(),
     onPinAll: vi.fn(),
     onMoveToFolder: vi.fn(),
     onCancel: vi.fn(),
+    isImageSelection: false,
     ...overrides,
   };
 }
@@ -88,6 +90,40 @@ describe("MultiSelectActionMenu", () => {
       render(createElement(MultiSelectActionMenu, makeProps({ onMoveToFolder })));
       fireEvent.click(screen.getByText("Move to folder"));
       expect(onMoveToFolder).toHaveBeenCalledOnce();
+    });
+  });
+
+  describe("image selection mode", () => {
+    it("renders 'Combine images' instead of 'Merge and paste' when isImageSelection is true", () => {
+      render(createElement(MultiSelectActionMenu, makeProps({ isImageSelection: true })));
+      expect(screen.getByText("Combine images")).toBeTruthy();
+      expect(screen.queryByText("Merge and paste")).toBeNull();
+      expect(screen.getByText("Pin all")).toBeTruthy();
+      expect(screen.getByText("Move to folder")).toBeTruthy();
+    });
+
+    it("clicking Combine images fires onCombine, not onMerge", () => {
+      const onMerge = vi.fn();
+      const onCombine = vi.fn();
+      render(createElement(MultiSelectActionMenu, makeProps({ isImageSelection: true, onMerge, onCombine })));
+      fireEvent.click(screen.getByText("Combine images"));
+      expect(onCombine).toHaveBeenCalledOnce();
+      expect(onMerge).not.toHaveBeenCalled();
+    });
+
+    it("pressing M fires onCombine (not onMerge) when isImageSelection is true", () => {
+      const onMerge = vi.fn();
+      const onCombine = vi.fn();
+      render(createElement(MultiSelectActionMenu, makeProps({ isImageSelection: true, onMerge, onCombine })));
+      fireEvent.keyDown(document, { key: "m" });
+      expect(onCombine).toHaveBeenCalledOnce();
+      expect(onMerge).not.toHaveBeenCalled();
+    });
+
+    it("highlights 'Combine images' by default (same row-1 slot as merge)", () => {
+      render(createElement(MultiSelectActionMenu, makeProps({ isImageSelection: true })));
+      const combine = screen.getByText("Combine images");
+      expect(combine.className).toContain("buttonHighlighted");
     });
   });
 });

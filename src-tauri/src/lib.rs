@@ -224,6 +224,7 @@ pub fn run() {
             commands::set_launch_at_login,
             commands::pick_app_bundle,
             commands::merge_and_paste_items,
+            commands::combine_and_paste_images,
             commands::get_folders,
             commands::create_folder,
             commands::rename_folder,

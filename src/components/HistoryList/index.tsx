@@ -26,6 +26,7 @@ interface HistoryListProps {
   multiSelectActive?: boolean;
   selections?: number[];
   flashingId?: number | null;
+  isImageMultiSelect?: boolean;
 }
 
 export function HistoryList({
@@ -43,6 +44,7 @@ export function HistoryList({
   multiSelectActive,
   selections,
   flashingId,
+  isImageMultiSelect,
 }: HistoryListProps) {
   const lastMousePos = useRef<{ x: number; y: number } | null>(null);
 
@@ -89,7 +91,11 @@ export function HistoryList({
 
         const itemId = entry.result.item.id;
         const itemKind = entry.result.item.kind;
-        const isSelectable = itemKind !== "image";
+        // Empty selection: both kinds are active. Once the first selection has
+        // locked in a kind (mirrors useAppKeyboard's homogeneity gate via the
+        // same isImageMultiSelect value), only matching-kind rows stay selectable.
+        const isSelectable =
+          !selections || selections.length === 0 || (itemKind === "image") === isImageMultiSelect;
         const selectionIndex = selections ? selections.indexOf(itemId) : -1;
         const selectionBadge = selectionIndex >= 0 ? selectionIndex + 1 : null;
         const inFolderView = expandedFolderId != null;

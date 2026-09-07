@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { useSetAtom } from "jotai";
 import { useLocation } from "react-router-dom";
 import { listen } from "@tauri-apps/api/event";
@@ -131,6 +131,20 @@ export function useAppState({ onTrialError, isActivated = false }: UseAppStatePa
   const selectedIndexRef = useRef(0);
   const pinAnimationRef = useRef<((id: number) => void) | null>(null);
 
+  // Single source of truth for "is the current multi-selection made of image
+  // items". Derived once here (from visibleEntries + the first selected id)
+  // rather than in useAppKeyboard, and threaded into both useAppKeyboard (to
+  // gate further Space-key selections) and the action-menu wiring below (to
+  // pick "Combine images" vs "Merge and paste"). Empty selection -> false, so
+  // the action menu still defaults to the merge row when nothing is selected.
+  const isImageMultiSelect = useMemo(() => {
+    if (multiSelect.selections.length === 0) return false;
+    const firstEntry = visibleEntries.find(
+      (ve) => ve.kind === "item" && ve.result.item.id === multiSelect.selections[0]
+    );
+    return firstEntry?.kind === "item" && firstEntry.result.item.kind === "image";
+  }, [multiSelect.selections, visibleEntries]);
+
   useAppKeyboard({
     multiSelect,
     visibleEntries,
@@ -142,6 +156,7 @@ export function useAppState({ onTrialError, isActivated = false }: UseAppStatePa
     dismiss,
     isActivated,
     onTrialError,
+    isImageMultiSelect,
   });
 
   useEffect(() => {
@@ -201,6 +216,22 @@ export function useAppState({ onTrialError, isActivated = false }: UseAppStatePa
   const onMultiMoveToFolder = useCallback(() => {
     nav.toFolderPickerMulti(multiSelect.selections);
   }, [nav, multiSelect]);
+
+  const onMultiCombineImages = useCallback(() => {
+    invoke("combine_and_paste_images", { itemIds: multiSelect.selections })
+      .then(() => {
+        multiSelect.exitMode();
+        nav.toHistory();
+        dismiss();
+      })
+      .catch((err: string) => {
+        if (err === TRIAL_ERROR) {
+          onTrialError?.("Image combine");
+        } else {
+          console.error(err);
+        }
+      });
+  }, [multiSelect, nav, dismiss, onTrialError]);
 
   const { listRef, pasteSelected, deletingId } = useItemSelection(
     undefined,
@@ -276,6 +307,8 @@ export function useAppState({ onTrialError, isActivated = false }: UseAppStatePa
     onMultiMerge,
     onMultiPinAll,
     onMultiMoveToFolder,
+    onMultiCombineImages,
+    isImageMultiSelect,
     moveItemsToFolder,
     moveItemToFolder: folderActions.moveItemToFolder,
     removeItemFromFolder: folderActions.removeItemFromFolder,

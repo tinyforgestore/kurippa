@@ -56,6 +56,8 @@ function App() {
     onMultiMerge,
     onMultiPinAll,
     onMultiMoveToFolder,
+    onMultiCombineImages,
+    isImageMultiSelect,
     moveItemsToFolder,
     moveItemToFolder,
     removeItemFromFolder,
@@ -92,6 +94,7 @@ function App() {
           <MultiSelectIndicator
             selections={multiSelect.selections}
             maxToastVisible={multiSelect.maxToastVisible}
+            maxToastCap={multiSelect.maxToastCap}
           />
         )}
         {activatedToast && <div className={inlineToastGreen}>Kurippa activated ✓</div>}
@@ -135,6 +138,8 @@ function App() {
           onMultiMerge={onMultiMerge}
           onMultiPinAll={onMultiPinAll}
           onMultiMoveToFolder={onMultiMoveToFolder}
+          onMultiCombineImages={onMultiCombineImages}
+          isImageMultiSelect={isImageMultiSelect}
           moveItemsToFolder={moveItemsToFolder}
           folders={folders}
           visibleEntries={visibleEntries}

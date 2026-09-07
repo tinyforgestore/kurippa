@@ -46,17 +46,16 @@ describe("useMultiSelect", () => {
         result.current.enterMode(1);
       });
       act(() => {
-        result.current.toggleSelection(2, true);
-        result.current.toggleSelection(3, true);
-        result.current.toggleSelection(4, true);
-        result.current.toggleSelection(5, true);
+        for (let id = 2; id <= 10; id++) {
+          result.current.toggleSelection(id, true);
+        }
       });
       act(() => {
-        result.current.toggleSelection(6, true); // triggers flash/toast
+        result.current.toggleSelection(11, true); // triggers flash/toast
       });
       expect(result.current.maxToastVisible).toBe(true);
       act(() => {
-        result.current.enterMode(10);
+        result.current.enterMode(99);
       });
       expect(result.current.flashingId).toBeNull();
       expect(result.current.maxToastVisible).toBe(false);
@@ -80,13 +79,12 @@ describe("useMultiSelect", () => {
       const { result } = renderHook(() => useMultiSelect(), makeWrapper());
       act(() => {
         result.current.enterMode(1);
-        result.current.toggleSelection(2, true);
-        result.current.toggleSelection(3, true);
-        result.current.toggleSelection(4, true);
-        result.current.toggleSelection(5, true);
+        for (let id = 2; id <= 10; id++) {
+          result.current.toggleSelection(id, true);
+        }
       });
       act(() => {
-        result.current.toggleSelection(6, true); // triggers flash/toast
+        result.current.toggleSelection(11, true); // triggers flash/toast
       });
       expect(result.current.maxToastVisible).toBe(true);
       act(() => {
@@ -147,37 +145,32 @@ describe("useMultiSelect", () => {
       expect(result.current.selections).toEqual([10, 20, 30]);
     });
 
-    describe("max-5 enforcement", () => {
-      it("does not allow a 6th selection", () => {
+    describe("max-10 enforcement", () => {
+      function fillToMax(result: { current: ReturnType<typeof useMultiSelect> }) {
+        result.current.enterMode(1);
+        for (let id = 2; id <= 10; id++) {
+          result.current.toggleSelection(id, true);
+        }
+      }
+
+      it("does not allow an 11th selection", () => {
         const { result } = renderHook(() => useMultiSelect(), makeWrapper());
+        act(() => fillToMax(result));
+        expect(result.current.selections).toHaveLength(10);
         act(() => {
-          result.current.enterMode(1);
-          result.current.toggleSelection(2, true);
-          result.current.toggleSelection(3, true);
-          result.current.toggleSelection(4, true);
-          result.current.toggleSelection(5, true);
+          result.current.toggleSelection(11, true);
         });
-        expect(result.current.selections).toHaveLength(5);
-        act(() => {
-          result.current.toggleSelection(6, true);
-        });
-        expect(result.current.selections).toHaveLength(5);
-        expect(result.current.selections).not.toContain(6);
+        expect(result.current.selections).toHaveLength(10);
+        expect(result.current.selections).not.toContain(11);
       });
 
-      it("sets flashingId to the 6th item and clears it after 150ms", () => {
+      it("sets flashingId to the 11th item and clears it after 150ms", () => {
         const { result } = renderHook(() => useMultiSelect(), makeWrapper());
+        act(() => fillToMax(result));
         act(() => {
-          result.current.enterMode(1);
-          result.current.toggleSelection(2, true);
-          result.current.toggleSelection(3, true);
-          result.current.toggleSelection(4, true);
-          result.current.toggleSelection(5, true);
+          result.current.toggleSelection(11, true);
         });
-        act(() => {
-          result.current.toggleSelection(6, true);
-        });
-        expect(result.current.flashingId).toBe(6);
+        expect(result.current.flashingId).toBe(11);
         act(() => {
           vi.advanceTimersByTime(150);
         });
@@ -186,15 +179,9 @@ describe("useMultiSelect", () => {
 
       it("shows maxToastVisible for 1500ms then hides it", () => {
         const { result } = renderHook(() => useMultiSelect(), makeWrapper());
+        act(() => fillToMax(result));
         act(() => {
-          result.current.enterMode(1);
-          result.current.toggleSelection(2, true);
-          result.current.toggleSelection(3, true);
-          result.current.toggleSelection(4, true);
-          result.current.toggleSelection(5, true);
-        });
-        act(() => {
-          result.current.toggleSelection(6, true);
+          result.current.toggleSelection(11, true);
         });
         expect(result.current.maxToastVisible).toBe(true);
         act(() => {
@@ -207,25 +194,60 @@ describe("useMultiSelect", () => {
         expect(result.current.maxToastVisible).toBe(false);
       });
 
-      it("allows adding after deselecting to go below 5", () => {
+      it("allows adding after deselecting to go below 10", () => {
         const { result } = renderHook(() => useMultiSelect(), makeWrapper());
-        act(() => {
-          result.current.enterMode(1);
-          result.current.toggleSelection(2, true);
-          result.current.toggleSelection(3, true);
-          result.current.toggleSelection(4, true);
-          result.current.toggleSelection(5, true);
-        });
+        act(() => fillToMax(result));
         act(() => {
           result.current.toggleSelection(1, true); // deselect
         });
         act(() => {
-          result.current.toggleSelection(6, true); // now OK
+          result.current.toggleSelection(11, true); // now OK
         });
-        expect(result.current.selections).toHaveLength(5);
-        expect(result.current.selections).toContain(6);
+        expect(result.current.selections).toHaveLength(10);
+        expect(result.current.selections).toContain(11);
         expect(result.current.flashingId).toBeNull();
         expect(result.current.maxToastVisible).toBe(false);
+      });
+    });
+
+    describe("explicit per-kind cap", () => {
+      it("defaults maxToastCap to MAX_SELECTIONS (10)", () => {
+        const { result } = renderHook(() => useMultiSelect(), makeWrapper());
+        expect(result.current.maxToastCap).toBe(10);
+      });
+
+      it("triggers the guard at a lower explicit cap instead of MAX_SELECTIONS", () => {
+        const { result } = renderHook(() => useMultiSelect(), makeWrapper());
+        act(() => {
+          result.current.enterMode(1);
+        });
+        act(() => {
+          result.current.toggleSelection(2, true, 4);
+          result.current.toggleSelection(3, true, 4);
+          result.current.toggleSelection(4, true, 4);
+        });
+        expect(result.current.selections).toHaveLength(4);
+        act(() => {
+          result.current.toggleSelection(5, true, 4); // 5th image — should be blocked
+        });
+        expect(result.current.selections).toHaveLength(4);
+        expect(result.current.selections).not.toContain(5);
+        expect(result.current.flashingId).toBe(5);
+        expect(result.current.maxToastVisible).toBe(true);
+      });
+
+      it("reflects the cap that was actually passed when the guard last fired", () => {
+        const { result } = renderHook(() => useMultiSelect(), makeWrapper());
+        act(() => {
+          result.current.enterMode(1);
+          result.current.toggleSelection(2, true, 4);
+          result.current.toggleSelection(3, true, 4);
+          result.current.toggleSelection(4, true, 4);
+        });
+        act(() => {
+          result.current.toggleSelection(5, true, 4); // guard fires with cap=4
+        });
+        expect(result.current.maxToastCap).toBe(4);
       });
     });
   });

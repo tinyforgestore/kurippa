@@ -15,6 +15,7 @@ function makeProps(overrides: Partial<Parameters<typeof MultiSelectIndicator>[0]
   return {
     selections: [],
     maxToastVisible: false,
+    maxToastCap: 10,
     ...overrides,
   };
 }
@@ -28,7 +29,7 @@ describe("MultiSelectIndicator", () => {
 
     it("renders the keyboard hint", () => {
       render(createElement(MultiSelectIndicator, makeProps()));
-      expect(screen.getByText(/Enter to merge/)).toBeTruthy();
+      expect(screen.getByText(/Enter for actions/)).toBeTruthy();
     });
 
     it("does not render badge span when selections is empty", () => {
@@ -51,14 +52,29 @@ describe("MultiSelectIndicator", () => {
       expect(screen.getByText("①②③④⑤")).toBeTruthy();
     });
 
+    it("renders badge characters for ten selections (the new max)", () => {
+      render(createElement(MultiSelectIndicator, makeProps({ selections: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10] })));
+      expect(screen.getByText("①②③④⑤⑥⑦⑧⑨⑩")).toBeTruthy();
+    });
+
     it("does not render toast when maxToastVisible is false", () => {
       const { container } = render(createElement(MultiSelectIndicator, makeProps({ maxToastVisible: false })));
       expect(container.querySelector(".toast")).toBeNull();
     });
 
-    it("renders 'Max 5 items' toast when maxToastVisible is true", () => {
+    it("renders 'Max 10 items' toast when maxToastVisible is true", () => {
       render(createElement(MultiSelectIndicator, makeProps({ maxToastVisible: true })));
-      expect(screen.getByText("Max 5 items")).toBeTruthy();
+      expect(screen.getByText("Max 10 items")).toBeTruthy();
+    });
+
+    it("renders the live maxToastCap value (e.g. 'Max 4 items' for image combine)", () => {
+      render(
+        createElement(
+          MultiSelectIndicator,
+          makeProps({ maxToastVisible: true, maxToastCap: 4 }),
+        ),
+      );
+      expect(screen.getByText("Max 4 items")).toBeTruthy();
     });
   });
 });

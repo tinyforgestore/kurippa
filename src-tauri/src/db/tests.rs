@@ -592,6 +592,86 @@ fn get_item_texts_skips_items_with_empty_text() {
 }
 
 // ------------------------------------------------------------------
+// get_item_images()
+// ------------------------------------------------------------------
+
+/// Insert a minimal image item directly via SQL and return its rowid.
+fn insert_image_item(
+    conn: &rusqlite::Connection,
+    path: &str,
+    width: i64,
+    height: i64,
+    created_at: i64,
+) -> i64 {
+    conn.execute(
+        "INSERT INTO items (kind, image_path, image_width, image_height, created_at, pinned) \
+         VALUES ('image', ?1, ?2, ?3, ?4, 0)",
+        rusqlite::params![path, width, height, created_at],
+    )
+    .expect("insert image item");
+    conn.last_insert_rowid()
+}
+
+#[test]
+fn get_item_images_returns_empty_for_empty_input() {
+    let conn = in_memory_db();
+    let result = get_item_images(&conn, &[]).expect("get_item_images should succeed");
+    assert!(result.is_empty(), "empty input should return empty vec");
+}
+
+#[test]
+fn get_item_images_returns_images_in_input_order() {
+    let conn = in_memory_db();
+    let id1 = insert_image_item(&conn, "img1.png", 100, 200, 1_000);
+    let id2 = insert_image_item(&conn, "img2.png", 300, 400, 2_000);
+    let id3 = insert_image_item(&conn, "img3.png", 500, 600, 3_000);
+
+    // Request in an order different from insertion.
+    let result =
+        get_item_images(&conn, &[id3, id1, id2]).expect("get_item_images should succeed");
+    let paths: Vec<&str> = result.iter().map(|m| m.image_path.as_str()).collect();
+    assert_eq!(paths, vec!["img3.png", "img1.png", "img2.png"]);
+    assert_eq!(result[0].width, 500);
+    assert_eq!(result[0].height, 600);
+}
+
+#[test]
+fn get_item_images_skips_non_image_rows() {
+    let conn = in_memory_db();
+    let image_id = insert_image_item(&conn, "only-image.png", 10, 20, 1_000);
+    let (text_id, _) =
+        insert_item(&conn, &make_item("just text", 2_000, false)).expect("insert text item");
+
+    let result = get_item_images(&conn, &[text_id, image_id])
+        .expect("get_item_images should succeed");
+    assert_eq!(result.len(), 1, "only the image row should be returned");
+    assert_eq!(result[0].image_path, "only-image.png");
+}
+
+#[test]
+fn get_item_images_skips_images_missing_dimensions() {
+    let conn = in_memory_db();
+    // Image row with a path but no width/height recorded (e.g. mid-finalize).
+    conn.execute(
+        "INSERT INTO items (kind, image_path, image_width, image_height, created_at, pinned) \
+         VALUES ('image', 'incomplete.png', NULL, NULL, 1_000, 0)",
+        [],
+    )
+    .expect("insert incomplete image item");
+    let incomplete_id = conn.last_insert_rowid();
+    let complete_id = insert_image_item(&conn, "complete.png", 50, 60, 2_000);
+
+    let result = get_item_images(&conn, &[incomplete_id, complete_id])
+        .expect("get_item_images should succeed");
+    assert_eq!(
+        result.len(),
+        1,
+        "image row missing width/height should be skipped"
+    );
+    assert_eq!(result[0].image_path, "complete.png");
+}
+
+// ------------------------------------------------------------------
 // get_history() — pinned & folder items exempt from limit cutoff
 // ------------------------------------------------------------------
 

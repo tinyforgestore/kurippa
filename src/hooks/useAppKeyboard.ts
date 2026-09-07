@@ -2,13 +2,14 @@ import { useEffect, MutableRefObject } from "react";
 import { useLocation } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
 import { useAppNavigation } from "@/hooks/useAppNavigation";
+import { MAX_SELECTIONS, MAX_IMAGE_COMBINE } from "@/hooks/useMultiSelect";
 
 interface MultiSelectHandle {
   active: boolean;
   selections: number[];
   enterMode: (id: number) => void;
   exitMode: () => void;
-  toggleSelection: (id: number, selectable: boolean) => void;
+  toggleSelection: (id: number, selectable: boolean, cap?: number) => void;
 }
 
 interface UseAppKeyboardParams {
@@ -22,6 +23,15 @@ interface UseAppKeyboardParams {
   dismiss: () => void;
   isActivated: boolean;
   onTrialError?: (feature: string) => void;
+  /**
+   * Whether the current multi-selection (if non-empty) is composed of image
+   * items. Derived once in useAppState from visibleEntries/selections[0] and
+   * threaded in here, so the "look up first selected item's kind" logic isn't
+   * duplicated between this hook and useAppState/useMultiSelectActionMenu.
+   * Meaningless (and ignored via the empty-selection short-circuit below)
+   * when selections is empty.
+   */
+  isImageMultiSelect: boolean;
 }
 
 export function useAppKeyboard({
@@ -35,6 +45,7 @@ export function useAppKeyboard({
   dismiss,
   isActivated,
   onTrialError,
+  isImageMultiSelect,
 }: UseAppKeyboardParams) {
   const location = useLocation();
   const nav = useAppNavigation();
@@ -107,8 +118,11 @@ export function useAppKeyboard({
         e.preventDefault();
         const currentEntry = visibleEntries[selectedIndexRef.current];
         if (currentEntry && currentEntry.kind === "item") {
-          const isSelectable = currentEntry.result.item.kind !== "image";
-          multiSelect.toggleSelection(currentEntry.result.item.id, isSelectable);
+          const newItemIsImage = currentEntry.result.item.kind === "image";
+          const isSelectable =
+            multiSelect.selections.length === 0 || newItemIsImage === isImageMultiSelect;
+          const cap = newItemIsImage ? MAX_IMAGE_COMBINE : MAX_SELECTIONS;
+          multiSelect.toggleSelection(currentEntry.result.item.id, isSelectable, cap);
         }
         return;
       }
@@ -141,5 +155,5 @@ export function useAppKeyboard({
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [location, nav, multiSelect, visibleEntries, selectedIndexRef, inputActive, expandedFolderId, exitFolderSection, setFolderNameInputValue, dismiss, isActivated, onTrialError]);
+  }, [location, nav, multiSelect, visibleEntries, selectedIndexRef, inputActive, expandedFolderId, exitFolderSection, setFolderNameInputValue, dismiss, isActivated, onTrialError, isImageMultiSelect]);
 }

@@ -26,6 +26,8 @@ interface MainContentProps {
   onMultiMerge: () => void;
   onMultiPinAll: () => void;
   onMultiMoveToFolder: () => void;
+  onMultiCombineImages: () => void;
+  isImageMultiSelect: boolean;
   moveItemsToFolder: (ids: number[], folderId: number) => void;
   folders: Folder[];
   visibleEntries: ListEntry[];
@@ -61,6 +63,8 @@ export function MainContent({
   onMultiMerge,
   onMultiPinAll,
   onMultiMoveToFolder,
+  onMultiCombineImages,
+  isImageMultiSelect,
   moveItemsToFolder,
   folders,
   visibleEntries,
@@ -196,9 +200,11 @@ export function MainContent({
           <MultiSelectActionMenu
             count={selections.length}
             onMerge={onMultiMerge}
+            onCombine={onMultiCombineImages}
             onPinAll={onMultiPinAll}
             onMoveToFolder={onMultiMoveToFolder}
             onCancel={() => navigate("/")}
+            isImageSelection={isImageMultiSelect}
           />
         }
       />
@@ -220,6 +226,7 @@ export function MainContent({
             multiSelectActive={multiSelectActive}
             selections={selections}
             flashingId={flashingId}
+            isImageMultiSelect={isImageMultiSelect}
           />
         }
       />

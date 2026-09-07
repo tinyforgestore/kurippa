@@ -236,6 +236,95 @@ pub fn finalize_with_optional_qr(
     }
 }
 
+/// Gap in pixels between images when compositing a combined image.
+pub const IMAGE_GAP_PX: u32 = 8;
+
+/// Computes canvas size and per-image (x, y) offsets for compositing.
+///
+/// Heuristic: all same width -> vertical stack; all same height -> horizontal
+/// stack; otherwise -> grid with ceil(sqrt(n)) columns, using a uniform cell
+/// size (max width x max height across all images). Images are placed at
+/// native size, left/top-aligned within their row/column, separated by
+/// `IMAGE_GAP_PX`. Returns (canvas_width, canvas_height, offsets) in the same
+/// order as the input. Empty input returns (0, 0, vec![]) — callers must
+/// guard against empty input before compositing.
+pub fn compute_layout(sizes: &[(u32, u32)]) -> (u32, u32, Vec<(u32, u32)>) {
+    if sizes.is_empty() {
+        return (0, 0, Vec::new());
+    }
+
+    let n = sizes.len();
+    let same_width = sizes.iter().all(|(w, _)| *w == sizes[0].0);
+    let same_height = sizes.iter().all(|(_, h)| *h == sizes[0].1);
+
+    if same_width {
+        let canvas_w = sizes[0].0;
+        let mut offsets = Vec::with_capacity(n);
+        let mut y = 0u32;
+        for (i, (_, h)) in sizes.iter().enumerate() {
+            offsets.push((0, y));
+            y += h;
+            if i != n - 1 {
+                y += IMAGE_GAP_PX;
+            }
+        }
+        return (canvas_w, y, offsets);
+    }
+
+    if same_height {
+        let canvas_h = sizes[0].1;
+        let mut offsets = Vec::with_capacity(n);
+        let mut x = 0u32;
+        for (i, (w, _)) in sizes.iter().enumerate() {
+            offsets.push((x, 0));
+            x += w;
+            if i != n - 1 {
+                x += IMAGE_GAP_PX;
+            }
+        }
+        return (x, canvas_h, offsets);
+    }
+
+    // Grid: ceil(sqrt(n)) columns, uniform cell size.
+    let cols = (n as f64).sqrt().ceil() as u32;
+    let rows = ((n as u32) + cols - 1) / cols;
+    let cell_w = sizes.iter().map(|(w, _)| *w).max().unwrap_or(0);
+    let cell_h = sizes.iter().map(|(_, h)| *h).max().unwrap_or(0);
+
+    let canvas_w = cols * cell_w + (cols.saturating_sub(1)) * IMAGE_GAP_PX;
+    let canvas_h = rows * cell_h + (rows.saturating_sub(1)) * IMAGE_GAP_PX;
+
+    let offsets = (0..n)
+        .map(|i| {
+            let col = (i as u32) % cols;
+            let row = (i as u32) / cols;
+            let x = col * (cell_w + IMAGE_GAP_PX);
+            let y = row * (cell_h + IMAGE_GAP_PX);
+            (x, y)
+        })
+        .collect();
+
+    (canvas_w, canvas_h, offsets)
+}
+
+/// Composites `images` onto a single white-background canvas per `compute_layout`.
+/// Panics if `images` is empty — callers must check non-empty first.
+pub fn compose_images(images: &[image::RgbaImage]) -> image::RgbaImage {
+    assert!(!images.is_empty(), "compose_images requires at least one image");
+
+    let sizes: Vec<(u32, u32)> = images.iter().map(|img| img.dimensions()).collect();
+    let (canvas_w, canvas_h, offsets) = compute_layout(&sizes);
+
+    let mut canvas: image::RgbaImage =
+        image::ImageBuffer::from_pixel(canvas_w, canvas_h, image::Rgba([255, 255, 255, 255]));
+
+    for (img, (x, y)) in images.iter().zip(offsets.iter()) {
+        image::imageops::overlay(&mut canvas, img, *x as i64, *y as i64);
+    }
+
+    canvas
+}
+
 /// Sub-directory under `app_data_dir` that stores clipboard image files.
 pub const IMAGES_DIR: &str = "images";
 
@@ -368,5 +457,106 @@ mod tests {
     #[test]
     fn is_image_path_rejects_no_extension() {
         assert!(!is_image_path(std::path::Path::new("imagefile")));
+    }
+
+    // ------------------------------------------------------------------ //
+    // compute_layout
+    // ------------------------------------------------------------------ //
+
+    #[test]
+    fn compute_layout_empty_returns_zero() {
+        let (w, h, offsets) = compute_layout(&[]);
+        assert_eq!((w, h), (0, 0));
+        assert!(offsets.is_empty());
+    }
+
+    #[test]
+    fn compute_layout_single_image_is_exact_size_no_gap() {
+        let (w, h, offsets) = compute_layout(&[(100, 60)]);
+        assert_eq!((w, h), (100, 60));
+        assert_eq!(offsets, vec![(0, 0)]);
+    }
+
+    #[test]
+    fn compute_layout_same_width_stacks_vertically() {
+        let sizes = [(100, 50), (100, 60), (100, 70)];
+        let (w, h, offsets) = compute_layout(&sizes);
+        assert_eq!(w, 100);
+        assert_eq!(h, 50 + 60 + 70 + 2 * IMAGE_GAP_PX);
+        assert_eq!(
+            offsets,
+            vec![
+                (0, 0),
+                (0, 50 + IMAGE_GAP_PX),
+                (0, 50 + 60 + 2 * IMAGE_GAP_PX),
+            ]
+        );
+    }
+
+    #[test]
+    fn compute_layout_same_height_stacks_horizontally() {
+        let sizes = [(50, 100), (60, 100), (70, 100)];
+        let (w, h, offsets) = compute_layout(&sizes);
+        assert_eq!(h, 100);
+        assert_eq!(w, 50 + 60 + 70 + 2 * IMAGE_GAP_PX);
+        assert_eq!(
+            offsets,
+            vec![
+                (0, 0),
+                (50 + IMAGE_GAP_PX, 0),
+                (50 + 60 + 2 * IMAGE_GAP_PX, 0),
+            ]
+        );
+    }
+
+    #[test]
+    fn compute_layout_varying_sizes_uses_grid() {
+        // 4 images, varying dimensions -> 2x2 grid with a uniform cell size
+        // equal to the max width/height across all images.
+        let sizes = [(30, 40), (50, 20), (10, 60), (40, 40)];
+        let (w, h, offsets) = compute_layout(&sizes);
+        let cell_w = 50; // max width
+        let cell_h = 60; // max height
+        assert_eq!(w, 2 * cell_w + IMAGE_GAP_PX);
+        assert_eq!(h, 2 * cell_h + IMAGE_GAP_PX);
+        assert_eq!(offsets.len(), 4);
+        assert_eq!(offsets[0], (0, 0));
+        assert_eq!(offsets[1], (cell_w + IMAGE_GAP_PX, 0));
+        assert_eq!(offsets[2], (0, cell_h + IMAGE_GAP_PX));
+        assert_eq!(offsets[3], (cell_w + IMAGE_GAP_PX, cell_h + IMAGE_GAP_PX));
+    }
+
+    #[test]
+    fn compute_layout_identical_sizes_prefers_vertical_stack() {
+        // Same width AND same height -> vertical stack takes precedence.
+        let sizes = [(20, 20), (20, 20)];
+        let (w, h, offsets) = compute_layout(&sizes);
+        assert_eq!(w, 20);
+        assert_eq!(h, 20 + 20 + IMAGE_GAP_PX);
+        assert_eq!(offsets, vec![(0, 0), (0, 20 + IMAGE_GAP_PX)]);
+    }
+
+    // ------------------------------------------------------------------ //
+    // compose_images
+    // ------------------------------------------------------------------ //
+
+    fn solid_image(w: u32, h: u32, color: [u8; 4]) -> image::RgbaImage {
+        image::ImageBuffer::from_pixel(w, h, image::Rgba(color))
+    }
+
+    #[test]
+    fn compose_images_same_width_stacks_and_places_pixels() {
+        let red = solid_image(2, 2, [255, 0, 0, 255]);
+        let blue = solid_image(2, 2, [0, 0, 255, 255]);
+        let composed = compose_images(&[red, blue]);
+
+        let (expected_w, expected_h, offsets) = compute_layout(&[(2, 2), (2, 2)]);
+        assert_eq!(composed.dimensions(), (expected_w, expected_h));
+
+        // First image's top-left pixel lands at (0, 0).
+        assert_eq!(*composed.get_pixel(0, 0), image::Rgba([255, 0, 0, 255]));
+        // Second image's top-left pixel lands at its computed offset.
+        let (x2, y2) = offsets[1];
+        assert_eq!(*composed.get_pixel(x2, y2), image::Rgba([0, 0, 255, 255]));
     }
 }

@@ -92,14 +92,17 @@ vi.mock("@/components/MultiSelectActionMenu", () => ({
   MultiSelectActionMenu: (props: {
     count: number;
     onMerge: () => void;
+    onCombine: () => void;
     onPinAll: () => void;
     onMoveToFolder: () => void;
     onCancel: () => void;
+    isImageSelection: boolean;
   }) =>
     createElement(
       "div",
-      { "data-screen": "multiAction", "data-count": props.count },
+      { "data-screen": "multiAction", "data-count": props.count, "data-image-selection": props.isImageSelection },
       createElement("button", { "data-action": "merge", onClick: props.onMerge }, "merge"),
+      createElement("button", { "data-action": "combine", onClick: props.onCombine }, "combine"),
       createElement("button", { "data-action": "pin", onClick: props.onPinAll }, "pin"),
       createElement("button", { "data-action": "folder", onClick: props.onMoveToFolder }, "folder"),
       createElement("button", { "data-action": "cancel", onClick: props.onCancel }, "cancel")
@@ -144,6 +147,8 @@ function makeProps(overrides: Partial<Parameters<typeof MainContent>[0]> = {}) {
     onMultiMerge: vi.fn(),
     onMultiPinAll: vi.fn(),
     onMultiMoveToFolder: vi.fn(),
+    onMultiCombineImages: vi.fn(),
+    isImageMultiSelect: false,
     moveItemsToFolder: vi.fn(),
     folders: [] as Folder[],
     visibleEntries: [] as ListEntry[],
@@ -415,6 +420,28 @@ describe("MainContent", () => {
       const { container } = renderAt("/multi-action", null, makeProps({ onMultiMoveToFolder, selections: [1, 2] }));
       fireEvent.click(container.querySelector("[data-action='folder']")!);
       expect(onMultiMoveToFolder).toHaveBeenCalledOnce();
+    });
+
+    it("multi-action combine button fires onMultiCombineImages", () => {
+      const onMultiCombineImages = vi.fn();
+      const { container } = renderAt(
+        "/multi-action",
+        null,
+        makeProps({ onMultiCombineImages, selections: [1, 2] })
+      );
+      fireEvent.click(container.querySelector("[data-action='combine']")!);
+      expect(onMultiCombineImages).toHaveBeenCalledOnce();
+    });
+
+    it("passes isImageMultiSelect through to MultiSelectActionMenu's isImageSelection prop", () => {
+      const { container } = renderAt(
+        "/multi-action",
+        null,
+        makeProps({ isImageMultiSelect: true, selections: [1, 2] })
+      );
+      expect(container.querySelector("[data-screen='multiAction']")!.getAttribute("data-image-selection")).toBe(
+        "true"
+      );
     });
 
     it("currentFolderId is resolved from visibleEntries matching itemId in route state", () => {

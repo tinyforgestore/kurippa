@@ -4,6 +4,7 @@ import { createElement } from "react";
 import { createStore, Provider } from "jotai";
 import { StoreProvider } from "@/store";
 import { useAppKeyboard } from "@/hooks/useAppKeyboard";
+import { MAX_SELECTIONS, MAX_IMAGE_COMBINE } from "@/hooks/useMultiSelect";
 import { ListEntry } from "@/types";
 
 function makeWrapper() {
@@ -53,11 +54,25 @@ function makeMultiSelect(overrides = {}) {
   };
 }
 
-function makeItemEntry(id: number): ListEntry {
+function makeItemEntry(id: number, kind: "text" | "image" = "text"): ListEntry {
   return {
     kind: "item",
     result: {
-      item: { id, kind: "text", text: "hello", html: null, rtf: null, image_path: null, source_app: null, created_at: 0, pinned: false, folder_id: null, qr_text: null, image_width: null, image_height: null },
+      item: {
+        id,
+        kind,
+        text: kind === "text" ? "hello" : null,
+        html: null,
+        rtf: null,
+        image_path: kind === "image" ? "img.png" : null,
+        source_app: null,
+        created_at: 0,
+        pinned: false,
+        folder_id: null,
+        qr_text: null,
+        image_width: kind === "image" ? 10 : null,
+        image_height: kind === "image" ? 10 : null,
+      },
       highlighted: null, score: 1, folder_name: null,
     },
   };
@@ -78,6 +93,7 @@ function makeConfig(overrides: Partial<Parameters<typeof useAppKeyboard>[0]> = {
     setFolderNameInputValue: vi.fn(),
     dismiss: vi.fn(),
     isActivated: true,
+    isImageMultiSelect: false,
     ...overrides,
   };
 }
@@ -188,7 +204,57 @@ describe("useAppKeyboard", () => {
       selectedIndexRef: { current: 0 },
     })), makeWrapper());
     fireKey(" ");
-    expect(multiSelect.toggleSelection).toHaveBeenCalledWith(2, true);
+    expect(multiSelect.toggleSelection).toHaveBeenCalledWith(2, true, MAX_SELECTIONS);
+  });
+
+  describe("homogeneous selection + per-kind cap", () => {
+    it("allows another image after an image is already selected", () => {
+      const multiSelect = makeMultiSelect({ active: true, selections: [1] });
+      renderHook(() => useAppKeyboard(makeConfig({
+        multiSelect,
+        isImageMultiSelect: true,
+        visibleEntries: [makeItemEntry(1, "image"), makeItemEntry(2, "image")],
+        selectedIndexRef: { current: 1 },
+      })), makeWrapper());
+      fireKey(" ");
+      expect(multiSelect.toggleSelection).toHaveBeenCalledWith(2, true, MAX_IMAGE_COMBINE);
+    });
+
+    it("blocks a text item when the current selection is images", () => {
+      const multiSelect = makeMultiSelect({ active: true, selections: [1] });
+      renderHook(() => useAppKeyboard(makeConfig({
+        multiSelect,
+        isImageMultiSelect: true,
+        visibleEntries: [makeItemEntry(1, "image"), makeItemEntry(2, "text")],
+        selectedIndexRef: { current: 1 },
+      })), makeWrapper());
+      fireKey(" ");
+      expect(multiSelect.toggleSelection).toHaveBeenCalledWith(2, false, MAX_SELECTIONS);
+    });
+
+    it("allows another text item after a text item is already selected", () => {
+      const multiSelect = makeMultiSelect({ active: true, selections: [1] });
+      renderHook(() => useAppKeyboard(makeConfig({
+        multiSelect,
+        isImageMultiSelect: false,
+        visibleEntries: [makeItemEntry(1, "text"), makeItemEntry(2, "text")],
+        selectedIndexRef: { current: 1 },
+      })), makeWrapper());
+      fireKey(" ");
+      expect(multiSelect.toggleSelection).toHaveBeenCalledWith(2, true, MAX_SELECTIONS);
+    });
+
+    it("blocks an image item when the current selection is text", () => {
+      const multiSelect = makeMultiSelect({ active: true, selections: [1] });
+      renderHook(() => useAppKeyboard(makeConfig({
+        multiSelect,
+        isImageMultiSelect: false,
+        visibleEntries: [makeItemEntry(1, "text"), makeItemEntry(2, "image")],
+        selectedIndexRef: { current: 1 },
+      })), makeWrapper());
+      fireKey(" ");
+      expect(multiSelect.toggleSelection).toHaveBeenCalledWith(2, false, MAX_IMAGE_COMBINE);
+    });
   });
 
   it("Enter in multiselect with 1 selection pastes and dismisses", () => {

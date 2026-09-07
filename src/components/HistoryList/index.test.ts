@@ -24,11 +24,16 @@ vi.mock("./index.css", () => ({
 
 // Mock EntryItem as a simple div with data-entry-item attribute
 vi.mock("./EntryItem", () => ({
-  EntryItem: (props: { selected: boolean; result: { item: { id: number } } }) =>
+  EntryItem: (props: {
+    selected: boolean;
+    result: { item: { id: number } };
+    isSelectable?: boolean;
+  }) =>
     createElement("div", {
       "data-entry-item": true,
       "data-selected": props.selected || undefined,
       "data-id": props.result.item.id,
+      "data-selectable": props.isSelectable === undefined ? undefined : String(props.isSelectable),
     }),
 }));
 
@@ -42,13 +47,13 @@ vi.mock("lucide-react", () => ({
 // Helpers
 // ---------------------------------------------------------------------------
 
-function makeItemEntry(id: number, text: string): ListEntry {
+function makeItemEntry(id: number, text: string, itemKind: "text" | "image" = "text"): ListEntry {
   return {
     kind: "item",
     result: {
       item: {
         id,
-        kind: "text",
+        kind: itemKind,
         text,
         html: null,
         rtf: null,
@@ -140,6 +145,103 @@ describe("HistoryList", () => {
       expect(entryItems[0]).not.toHaveAttribute("data-selected");
       expect(entryItems[1]).not.toHaveAttribute("data-selected");
       expect(entryItems[2]).toHaveAttribute("data-selected");
+    });
+  });
+
+  describe("multi-select homogeneity gating (isSelectable per row)", () => {
+    it("marks both text and image rows selectable when nothing is selected yet", () => {
+      const entries: ListEntry[] = [
+        makeItemEntry(1, "text one", "text"),
+        makeItemEntry(2, "image one", "image"),
+      ];
+
+      render(
+        createElement(
+          HistoryList,
+          makeProps({
+            visibleEntries: entries,
+            multiSelectActive: true,
+            selections: [],
+            isImageMultiSelect: false,
+          })
+        )
+      );
+
+      const entryItems = document.querySelectorAll("[data-entry-item]");
+      expect(entryItems[0]).toHaveAttribute("data-selectable", "true");
+      expect(entryItems[1]).toHaveAttribute("data-selectable", "true");
+    });
+
+    it("marks text rows unselectable once the first selection locked in image mode", () => {
+      const entries: ListEntry[] = [
+        makeItemEntry(1, "image one", "image"),
+        makeItemEntry(2, "text one", "text"),
+        makeItemEntry(3, "image two", "image"),
+      ];
+
+      render(
+        createElement(
+          HistoryList,
+          makeProps({
+            visibleEntries: entries,
+            multiSelectActive: true,
+            selections: [1],
+            isImageMultiSelect: true,
+          })
+        )
+      );
+
+      const entryItems = document.querySelectorAll("[data-entry-item]");
+      expect(entryItems[0]).toHaveAttribute("data-selectable", "true"); // image, matches
+      expect(entryItems[1]).toHaveAttribute("data-selectable", "false"); // text, blocked
+      expect(entryItems[2]).toHaveAttribute("data-selectable", "true"); // image, matches
+    });
+
+    it("marks image rows unselectable once the first selection locked in text mode", () => {
+      const entries: ListEntry[] = [
+        makeItemEntry(1, "text one", "text"),
+        makeItemEntry(2, "image one", "image"),
+        makeItemEntry(3, "text two", "text"),
+      ];
+
+      render(
+        createElement(
+          HistoryList,
+          makeProps({
+            visibleEntries: entries,
+            multiSelectActive: true,
+            selections: [1],
+            isImageMultiSelect: false,
+          })
+        )
+      );
+
+      const entryItems = document.querySelectorAll("[data-entry-item]");
+      expect(entryItems[0]).toHaveAttribute("data-selectable", "true"); // text, matches
+      expect(entryItems[1]).toHaveAttribute("data-selectable", "false"); // image, blocked
+      expect(entryItems[2]).toHaveAttribute("data-selectable", "true"); // text, matches
+    });
+
+    it("treats undefined selections the same as empty (both kinds selectable)", () => {
+      const entries: ListEntry[] = [
+        makeItemEntry(1, "text one", "text"),
+        makeItemEntry(2, "image one", "image"),
+      ];
+
+      render(
+        createElement(
+          HistoryList,
+          makeProps({
+            visibleEntries: entries,
+            multiSelectActive: true,
+            isImageMultiSelect: false,
+          })
+        )
+      );
+
+      const entryItems = document.querySelectorAll("[data-entry-item]");
+      expect(entryItems[0]).toHaveAttribute("data-selectable", "true");
+      expect(entryItems[1]).toHaveAttribute("data-selectable", "true");
     });
   });
 
