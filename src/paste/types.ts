@@ -8,5 +8,6 @@ export interface PasteStrategy<T extends ClipboardEntry = ClipboardEntry> {
   applicable?: (entry: T) => boolean;
   preview?: (entry: T) => string | null;
   execute?: (entry: T) => Promise<void>;
+  insertsItems?: boolean;
   children?: PasteStrategy<T>[];
 }

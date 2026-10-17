@@ -1,6 +1,7 @@
 import { EntryType, ClipboardEntry } from "@/entries/base";
 import { PasteStrategy } from "@/paste/types";
 import { textStrategies } from "@/paste/strategies/text";
+import { splitStrategy } from "@/paste/strategies/text/split";
 import { urlStrategies } from "@/paste/strategies/url";
 import { colorStrategies } from "@/paste/strategies/color";
 import { rtfStrategies } from "@/paste/strategies/rtf";
@@ -8,11 +9,11 @@ import { filePathStrategies } from "@/paste/strategies/filePath";
 import { imageStrategies } from "@/paste/strategies/image";
 
 const registry: Record<EntryType, PasteStrategy<ClipboardEntry>[]> = {
-  text: textStrategies,
+  text: [...textStrategies, splitStrategy],
   rtf: rtfStrategies,
-  url: [...textStrategies, ...urlStrategies],
+  url: [...textStrategies, ...urlStrategies, splitStrategy],
   color: colorStrategies,
-  "file-path": [...textStrategies, ...filePathStrategies],
+  "file-path": [...textStrategies, ...filePathStrategies, splitStrategy],
   image: imageStrategies,
 };
 

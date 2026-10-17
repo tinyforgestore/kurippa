@@ -87,6 +87,48 @@ describe("usePasteActions", () => {
     });
   });
 
+  describe("executePasteOption — split into items", () => {
+    function commaSplitOption() {
+      const options = getPasteOptions(makeItem({ id: 5, text: "a,b,c" }));
+      return options.find((o) => o.label === "Split into items")!.submenu![0];
+    }
+
+    it("invokes insert_text_items, returns to history and notifies onItemsInserted without pasting", async () => {
+      const onItemsInserted = vi.fn();
+      const { result } = renderHook(() =>
+        usePasteActions({ multiSelect: makeMultiSelect(), dismiss: vi.fn(), onItemsInserted })
+      );
+      await act(async () => result.current.executePasteOption(commaSplitOption()));
+      expect(mockInvoke).toHaveBeenCalledWith("insert_text_items", { texts: ["a", "b", "c"] });
+      expect(mockInvoke).not.toHaveBeenCalledWith("paste_item", expect.anything());
+      expect(mockNav.toHistory).toHaveBeenCalledOnce();
+      expect(onItemsInserted).toHaveBeenCalledOnce();
+    });
+
+    it("does not call onItemsInserted when the command fails", async () => {
+      const consoleSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+      mockInvoke.mockRejectedValueOnce("too many pieces");
+      const onItemsInserted = vi.fn();
+      const { result } = renderHook(() =>
+        usePasteActions({ multiSelect: makeMultiSelect(), dismiss: vi.fn(), onItemsInserted })
+      );
+      await act(async () => result.current.executePasteOption(commaSplitOption()));
+      expect(onItemsInserted).not.toHaveBeenCalled();
+      expect(consoleSpy).toHaveBeenCalledWith("too many pieces");
+      consoleSpy.mockRestore();
+    });
+
+    it("does not call onItemsInserted for ordinary paste options", async () => {
+      const onItemsInserted = vi.fn();
+      const options = getPasteOptions(makeItem({ text: "hello" }));
+      const { result } = renderHook(() =>
+        usePasteActions({ multiSelect: makeMultiSelect(), dismiss: vi.fn(), onItemsInserted })
+      );
+      await act(async () => result.current.executePasteOption(options[0]));
+      expect(onItemsInserted).not.toHaveBeenCalled();
+    });
+  });
+
   describe("onMergePaste", () => {
     it("invokes merge_and_paste_items with selections and separator", async () => {
       const dismiss = vi.fn();

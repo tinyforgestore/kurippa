@@ -186,6 +186,23 @@ pub fn merge_and_paste_items(
 }
 
 #[tauri::command]
+pub fn insert_text_items(
+    app: tauri::AppHandle,
+    db: tauri::State<DbState>,
+    texts: Vec<String>,
+) -> Result<(), String> {
+    let (inserted, evicted) = {
+        let conn = db.lock().map_err(|e| e.to_string())?;
+        db::insert_text_pieces(&conn, &texts, clipboard::unix_now())?
+    };
+    clipboard::image::cleanup_image_files(&app, &evicted);
+    for item in &inserted {
+        let _ = app.emit(events::CLIPBOARD_UPDATED, item);
+    }
+    Ok(())
+}
+
+#[tauri::command]
 pub fn combine_and_paste_images(
     app: tauri::AppHandle,
     paste_skip: tauri::State<clipboard::PasteSkip>,

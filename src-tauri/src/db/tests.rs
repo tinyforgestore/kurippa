@@ -853,3 +853,88 @@ fn move_items_to_folder_empty_ids_is_noop() {
         .expect("query folder_id");
     assert!(folder_id.is_none(), "empty move must not touch any item");
 }
+
+// ------------------------------------------------------------------
+// insert_text_pieces()
+// ------------------------------------------------------------------
+
+fn pieces(texts: &[&str]) -> Vec<String> {
+    texts.iter().map(|t| t.to_string()).collect()
+}
+
+#[test]
+fn insert_text_pieces_puts_first_piece_on_top() {
+    let conn = in_memory_db();
+    insert_item(&conn, &make_item("older", 1_000, false)).expect("insert older");
+
+    insert_text_pieces(&conn, &pieces(&["car", "plane", "train"]), 2_000).expect("insert pieces");
+
+    let texts: Vec<String> = get_history(&conn, 10)
+        .expect("history")
+        .into_iter()
+        .map(|i| i.text.unwrap())
+        .collect();
+    assert_eq!(texts, vec!["car", "plane", "train", "older"]);
+}
+
+#[test]
+fn insert_text_pieces_returns_items_last_to_first() {
+    let conn = in_memory_db();
+    let (inserted, _) =
+        insert_text_pieces(&conn, &pieces(&["a", "b", "c"]), 2_000).expect("insert pieces");
+
+    let texts: Vec<_> = inserted.iter().map(|i| i.text.as_deref().unwrap()).collect();
+    assert_eq!(texts, vec!["c", "b", "a"]);
+    assert!(inserted.windows(2).all(|w| w[0].id < w[1].id));
+    assert!(inserted.iter().all(|i| i.id > 0));
+}
+
+#[test]
+fn insert_text_pieces_keeps_duplicate_texts() {
+    let conn = in_memory_db();
+    insert_text_pieces(&conn, &pieces(&["a", "a", "b"]), 2_000).expect("insert pieces");
+
+    let texts: Vec<String> = get_history(&conn, 10)
+        .expect("history")
+        .into_iter()
+        .map(|i| i.text.unwrap())
+        .collect();
+    assert_eq!(texts, vec!["a", "a", "b"]);
+}
+
+#[test]
+fn insert_text_pieces_creates_plain_unpinned_text_items() {
+    let conn = in_memory_db();
+    let (inserted, _) = insert_text_pieces(&conn, &pieces(&["x", "y"]), 2_000).expect("insert");
+
+    for item in get_history(&conn, 10).expect("history") {
+        assert_eq!(item.kind, "text");
+        assert!(!item.pinned);
+        assert!(item.folder_id.is_none());
+        assert!(item.html.is_none() && item.rtf.is_none() && item.image_path.is_none());
+        assert_eq!(item.created_at, 2_000);
+    }
+    assert_eq!(inserted.len(), 2);
+}
+
+#[test]
+fn insert_text_pieces_rejects_empty_list() {
+    let conn = in_memory_db();
+    assert!(insert_text_pieces(&conn, &[], 2_000).is_err());
+}
+
+#[test]
+fn insert_text_pieces_accepts_exactly_max_pieces() {
+    let conn = in_memory_db();
+    let many: Vec<String> = (0..MAX_SPLIT_PIECES).map(|i| i.to_string()).collect();
+    let (inserted, _) = insert_text_pieces(&conn, &many, 2_000).expect("max pieces allowed");
+    assert_eq!(inserted.len(), MAX_SPLIT_PIECES);
+}
+
+#[test]
+fn insert_text_pieces_rejects_more_than_max_pieces_and_inserts_nothing() {
+    let conn = in_memory_db();
+    let too_many: Vec<String> = (0..=MAX_SPLIT_PIECES).map(|i| i.to_string()).collect();
+    assert!(insert_text_pieces(&conn, &too_many, 2_000).is_err());
+    assert!(get_history(&conn, 100).expect("history").is_empty());
+}

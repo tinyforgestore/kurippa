@@ -14,7 +14,7 @@ const textIds = [
 
 describe("strategiesFor", () => {
   it("text returns the unified text strategy list", () => {
-    expect(strategiesFor("text").map((s) => s.id)).toEqual(textIds);
+    expect(strategiesFor("text").map((s) => s.id)).toEqual([...textIds, "text.split"]);
   });
 
   it("rtf returns rtf-only strategies", () => {
@@ -22,7 +22,7 @@ describe("strategiesFor", () => {
   });
 
   it("url appends url strategies after text", () => {
-    expect(strategiesFor("url").map((s) => s.id)).toEqual([...textIds, "url.markdownLink"]);
+    expect(strategiesFor("url").map((s) => s.id)).toEqual([...textIds, "url.markdownLink", "text.split"]);
   });
 
   it("color returns color-only strategies", () => {
@@ -35,7 +35,7 @@ describe("strategiesFor", () => {
   });
 
   it("file-path appends filename after text", () => {
-    expect(strategiesFor("file-path").map((s) => s.id)).toEqual([...textIds, "filePath.filename"]);
+    expect(strategiesFor("file-path").map((s) => s.id)).toEqual([...textIds, "filePath.filename", "text.split"]);
   });
 
   it("image returns image-only strategies", () => {

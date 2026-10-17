@@ -21,8 +21,8 @@ import { useAppNavigation } from "@/hooks/useAppNavigation";
 import { ClipboardItem } from "@/types";
 import { TRIAL_ERROR } from "@/constants/errors";
 import { updateInfoAtom, pasteAsPreviewTextAtom } from "@/atoms/ui";
-import { selectedIndexAtom } from "@/atoms/navigation";
-import { useClipboardStore, useNavigationStore, useUIStore } from "@/store";
+import { selectedIndexAtom, expandedSectionAtom } from "@/atoms/navigation";
+import { useClipboardStore, useFoldersStore, useNavigationStore, useUIStore } from "@/store";
 
 export type AppScreen =
   | { kind: "history" }
@@ -44,10 +44,17 @@ export function useAppState({ onTrialError, isActivated = false }: UseAppStatePa
 
   const { updateInfo, pasteAsPreviewText } = useUIStore();
   const { query, selectedIndex, inPinnedSection, expandedFolderId } = useNavigationStore();
-  const { visibleEntries } = useClipboardStore();
+  const { visibleEntries, allItems } = useClipboardStore();
+  const { folders } = useFoldersStore();
   const setUpdateInfo = useSetAtom(updateInfoAtom);
   const setPasteAsPreviewText = useSetAtom(pasteAsPreviewTextAtom);
   const setSelectedIndex = useSetAtom(selectedIndexAtom);
+  const setExpandedSection = useSetAtom(expandedSectionAtom);
+  const pendingCursorRef = useRef<number | null>(null);
+  const queryRef = useRef(query);
+  // Read at callback time: the query may have changed while insert_text_items was in flight.
+  // eslint-disable-next-line react-hooks/refs
+  queryRef.current = query;
 
   const folderNameInputValueSetterRef = useRef<(v: string) => void>(() => {});
   const cancelClearConfirmRef = useRef<() => void>(() => {});
@@ -122,10 +129,28 @@ export function useAppState({ onTrialError, isActivated = false }: UseAppStatePa
   // eslint-disable-next-line react-hooks/refs
   cancelClearConfirmRef.current = clearConfirm.onCancel;
 
+  // The cursor index comes from the top-level layout (pinned entry + folder headers precede
+  // regular items), so it stays valid whatever the pre-insert snapshot or expanded section was.
+  const onItemsInserted = useCallback(() => {
+    const hasPinned = allItems.some((i) => i.pinned);
+    // Mirrors the top-level layout in visibleEntriesAtom (src/atoms/derived.ts).
+    const firstRegular = (hasPinned ? 1 : 0) + folders.length;
+    setExpandedSection(null);
+    reloadHistory();
+    if (queryRef.current.trim() === "") {
+      setSelectedIndex(firstRegular);
+    } else {
+      // useItemSelection resets the cursor to 0 when the query changes, so apply after that.
+      pendingCursorRef.current = firstRegular;
+      setQuery("");
+    }
+  }, [allItems, folders, reloadHistory, setExpandedSection, setSelectedIndex, setQuery]);
+
   const { executePasteOption, onMergePaste } = usePasteActions({
     multiSelect,
     dismiss,
     onTrialError,
+    onItemsInserted,
   });
 
   const selectedIndexRef = useRef(0);
@@ -261,6 +286,13 @@ export function useAppState({ onTrialError, isActivated = false }: UseAppStatePa
   selectedIndexRef.current = selectedIndex;
   // eslint-disable-next-line react-hooks/refs
   resetSelectionRef.current = () => setSelectedIndex(0);
+
+  // Declared after useItemSelection so it runs after that hook's reset-on-query effect.
+  useEffect(() => {
+    if (pendingCursorRef.current === null) return;
+    setSelectedIndex(pendingCursorRef.current);
+    pendingCursorRef.current = null;
+  }, [query, setSelectedIndex]);
 
   const { liftingId, landingId, handleTogglePin } = usePinAnimation(togglePinItem, listRef);
   // eslint-disable-next-line react-hooks/refs

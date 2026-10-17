@@ -11,6 +11,7 @@ import { trimSingleLineStrategy, trimMultiLineStrategy } from "@/paste/strategie
 // Unified array. After applicable() filtering:
 //   single-line → [plain, codeBlock, changeCase, wrap, trim]
 //   multi-line  → [plain, codeBlock, joinLines, numberLines, trimLines]
+// splitStrategy is appended last in registry.ts so existing shortcut numbers stay put.
 export const textStrategies: PasteStrategy<ClipboardEntry>[] = [
   plainStrategy,
   codeBlockStrategy,

@@ -63,6 +63,7 @@ export const visibleEntriesAtom = atom<ListEntry[]>((get) => {
   } else {
     const entries: ListEntry[] = [];
 
+    // useAppState's post-split cursor index depends on this top-level layout.
     if (pinnedResults.length === 1) {
       entries.push({ kind: "item" as const, result: pinnedResults[0] });
     } else if (pinnedResults.length >= 2) {

@@ -234,10 +234,10 @@ describe("getPasteOptions", () => {
   });
 
   describe("plain text items", () => {
-    it("returns 5 top-level options for single-line plain text", () => {
+    it("returns 6 top-level options for single-line plain text with a splittable delimiter", () => {
       const item = makeClipboardItem({ id: 3, kind: "text", text: "hello world" });
       const options = getPasteOptions(item);
-      expect(options).toHaveLength(5);
+      expect(options).toHaveLength(6);
     });
 
     it("first option is Paste as plain text", () => {
@@ -312,10 +312,53 @@ describe("getPasteOptions", () => {
       expect(options[4].action).toEqual({ kind: "paste-text", text: "hello world", itemId: 3 });
     });
 
-    it("returns 5 options for multi-line plain text", () => {
+    it("returns 6 options for multi-line plain text", () => {
       const item = makeClipboardItem({ id: 4, kind: "text", text: "line one\nline two" });
       const options = getPasteOptions(item);
+      expect(options).toHaveLength(6);
+    });
+
+    it("returns 5 options for single-line text with nothing to split", () => {
+      const item = makeClipboardItem({ id: 4, kind: "text", text: "hello" });
+      const options = getPasteOptions(item);
       expect(options).toHaveLength(5);
+      expect(options.map((o) => o.label)).not.toContain("Split into items");
+    });
+
+    it("last option is Split into items with only the delimiters that yield 2+ pieces", () => {
+      const item = makeClipboardItem({ id: 4, kind: "text", text: "a,b c" });
+      const options = getPasteOptions(item);
+      const split = options[options.length - 1];
+      expect(split.label).toBe("Split into items");
+      expect(split.submenu!.map((o) => o.label)).toEqual(["Comma", "Space"]);
+      expect(split.submenu![0].action).toEqual({ kind: "paste-text", text: "a\nb c", itemId: 4 });
+    });
+
+    it("url keeps its option positions and appends Split into items last", () => {
+      const plain = getPasteOptions(makeClipboardItem({ id: 5, text: "https://example.com/a" }));
+      expect(plain).toHaveLength(6);
+      expect(plain.map((o) => o.label)).not.toContain("Split into items");
+      const list = getPasteOptions(makeClipboardItem({ id: 5, text: "https://a.com,https://b.com" }));
+      expect(list).toHaveLength(7);
+      expect(list.slice(0, 5).map((o) => o.label)).toEqual(plain.slice(0, 5).map((o) => o.label));
+      expect(list[5].label).toContain("Markdown link");
+      expect(list[6].label).toBe("Split into items");
+    });
+
+    it("file-path keeps its option positions and appends Split into items last", () => {
+      const plain = getPasteOptions(makeClipboardItem({ id: 9, text: "/Users/willy/document.pdf" }));
+      expect(plain).toHaveLength(6);
+      expect(plain.map((o) => o.label)).not.toContain("Split into items");
+      for (const text of ["/var/log/a.log\n/var/log/b.log", "~/a, ~/b"]) {
+        const list = getPasteOptions(makeClipboardItem({ id: 9, text }));
+        expect(list[list.length - 1].label).toBe("Split into items");
+        expect(list[5].label).toContain("ilename");
+      }
+    });
+
+    it("does not offer Split into items for image items", () => {
+      const item = makeClipboardItem({ id: 4, kind: "image", text: "a,b", image_path: "4.png" });
+      expect(getPasteOptions(item).map((o) => o.label)).not.toContain("Split into items");
     });
   });
 });

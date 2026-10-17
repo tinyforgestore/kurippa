@@ -51,6 +51,14 @@ export function joinLines(text: string): string {
   return text.replace(/\n/g, " ").replace(/  +/g, " ").trim();
 }
 
+export function splitText(text: string, delimiter: string): string[] {
+  return text
+    .replace(/\r\n/g, "\n")
+    .split(delimiter)
+    .map((piece) => piece.trim())
+    .filter((piece) => piece.length > 0);
+}
+
 export function numberLines(text: string): string {
   return text.split("\n").map((line, i) => `${i + 1}. ${line}`).join("\n");
 }

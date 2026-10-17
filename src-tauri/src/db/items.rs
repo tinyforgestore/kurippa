@@ -94,6 +94,42 @@ pub fn insert_item(conn: &Connection, item: &ClipboardItem) -> Result<(i64, Vec<
     Ok((id, evicted_paths))
 }
 
+// Mirrored in src/paste/strategies/text/split.ts.
+pub const MAX_SPLIT_PIECES: usize = 50;
+
+/// Insert `pieces` as plain text items, last to first, so the first piece is the newest row.
+/// Returns the inserted items in insertion order plus the image filenames evicted along the way.
+pub fn insert_text_pieces(
+    conn: &Connection,
+    pieces: &[String],
+    created_at: i64,
+) -> std::result::Result<(Vec<ClipboardItem>, Vec<String>), String> {
+    if pieces.is_empty() {
+        return Err("no pieces to insert".to_string());
+    }
+    if pieces.len() > MAX_SPLIT_PIECES {
+        return Err(format!("too many pieces (max {MAX_SPLIT_PIECES})"));
+    }
+
+    let mut inserted = Vec::with_capacity(pieces.len());
+    let mut evicted = Vec::new();
+    for piece in pieces.iter().rev() {
+        let item = ClipboardItem {
+            id: 0,
+            kind: kind::TEXT.to_string(),
+            text: Some(piece.clone()),
+            html: None, rtf: None, image_path: None, source_app: None,
+            created_at,
+            pinned: false, folder_id: None, qr_text: None,
+            image_width: None, image_height: None,
+        };
+        let (id, paths) = insert_item(conn, &item).map_err(|e| e.to_string())?;
+        evicted.extend(paths);
+        inserted.push(ClipboardItem { id, ..item });
+    }
+    Ok((inserted, evicted))
+}
+
 /// Delete a single item by id. Used to clean up rows whose associated file
 /// could not be finalised after insert (e.g. a failed image rename).
 pub fn delete_item(conn: &Connection, id: i64) -> Result<()> {

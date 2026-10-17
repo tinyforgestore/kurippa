@@ -9,9 +9,10 @@ interface UsePasteActionsParams {
   multiSelect: { selections: number[]; exitMode: () => void };
   dismiss: () => void;
   onTrialError?: (feature: string) => void;
+  onItemsInserted?: () => void;
 }
 
-export function usePasteActions({ multiSelect, dismiss, onTrialError }: UsePasteActionsParams) {
+export function usePasteActions({ multiSelect, dismiss, onTrialError, onItemsInserted }: UsePasteActionsParams) {
   const nav = useAppNavigation();
 
   const executePasteOption = useCallback((option: PasteOption) => {
@@ -25,8 +26,12 @@ export function usePasteActions({ multiSelect, dismiss, onTrialError }: UsePaste
       console.error("[paste] no strategy registered for option");
       return;
     }
-    execute(entry, strategy).catch(console.error);
-  }, [nav]);
+    execute(entry, strategy)
+      .then(() => {
+        if (strategy.insertsItems) onItemsInserted?.();
+      })
+      .catch(console.error);
+  }, [nav, onItemsInserted]);
 
   const onMergePaste = useCallback((separator: string) => {
     invoke("merge_and_paste_items", {

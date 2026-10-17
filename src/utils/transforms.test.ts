@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { toUpperCase, toLowerCase, toPascalCase, toCamelCase, toSnakeCase, toSlug, trimWhitespace } from "@/utils/transforms";
+import { toUpperCase, toLowerCase, toPascalCase, toCamelCase, toSnakeCase, toSlug, trimWhitespace, splitText } from "@/utils/transforms";
 
 describe("toUpperCase", () => {
   it("uppercases a normal string", () => {
@@ -180,5 +180,63 @@ describe("trimWhitespace", () => {
 
   it("trims tabs and newlines", () => {
     expect(trimWhitespace("\thello world\n")).toBe("hello world");
+  });
+});
+
+describe("splitText", () => {
+  it.each([
+    ["comma", ",", "car,plane,train,ship"],
+    ["newline", "\n", "car\nplane\ntrain\nship"],
+    ["space", " ", "car plane train ship"],
+    ["tab", "\t", "car\tplane\ttrain\tship"],
+    ["semicolon", ";", "car;plane;train;ship"],
+    ["pipe", "|", "car|plane|train|ship"],
+  ])("splits on %s", (_name, delimiter, text) => {
+    expect(splitText(text, delimiter)).toEqual(["car", "plane", "train", "ship"]);
+  });
+
+  it("trims each piece", () => {
+    expect(splitText("a, b ,  c", ",")).toEqual(["a", "b", "c"]);
+  });
+
+  it("drops empty pieces", () => {
+    expect(splitText("a,,b", ",")).toEqual(["a", "b"]);
+  });
+
+  it("drops whitespace-only pieces", () => {
+    expect(splitText("a, ,b", ",")).toEqual(["a", "b"]);
+  });
+
+  it("collapses repeated spaces when splitting on space", () => {
+    expect(splitText("a  b", " ")).toEqual(["a", "b"]);
+  });
+
+  it("ignores leading and trailing delimiters", () => {
+    expect(splitText(",a,b,", ",")).toEqual(["a", "b"]);
+  });
+
+  it("returns one piece when the delimiter is absent", () => {
+    expect(splitText("hello", ",")).toEqual(["hello"]);
+  });
+
+  it("returns no pieces for an empty string", () => {
+    expect(splitText("", ",")).toEqual([]);
+  });
+
+  it("returns no pieces when only delimiters are present", () => {
+    expect(splitText(",,,", ",")).toEqual([]);
+  });
+
+  it("treats \\r\\n as a newline", () => {
+    expect(splitText("a\r\nb\r\nc", "\n")).toEqual(["a", "b", "c"]);
+  });
+
+  it("keeps duplicate pieces", () => {
+    expect(splitText("a,a,b", ",")).toEqual(["a", "a", "b"]);
+  });
+
+  it("supports multi-character delimiters", () => {
+    expect(splitText("a::b::c", "::")).toEqual(["a", "b", "c"]);
+    expect(splitText("a, b, c", ", ")).toEqual(["a", "b", "c"]);
   });
 });
